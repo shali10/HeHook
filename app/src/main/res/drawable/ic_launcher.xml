@@ -3,14 +3,20 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Background rounded rect -->
+    <path
+        android:fillColor="#1E1B4B"
+        android:pathData="M16,0h76a16,16 0 0,1 16,16v76a16,16 0 0,1 -16,16h-76a16,16 0 0,1 -16,-16v-76a16,16 0 0,1 16,-16z" />
+    <!-- Gradient accent circle overlay -->
+    <path
+        android:fillColor="#312E81"
+        android:pathData="M54,10a44,44 0 1,0 44,44a44,44 0 0,0 -44,-44z" />
+    <!-- Outer Shield -->
+    <path
+        android:fillColor="#4F46E5"
+        android:pathData="M54,22L28,34v26c0,16.5 11.1,31.9 26,36c14.9,-4.1 26,-19.5 26,-36V34L54,22z" />
+    <!-- Inner Hook & Glow -->
     <path
         android:fillColor="#10B981"
-        android:pathData="M0,0h108v108h-108z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M34,54 L50,70 L74,38"
-        android:strokeWidth="6"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+        android:pathData="M48,68L36,56l4.2,-4.2L48,59.6l19.8,-19.8L72,44L48,68z" />
 </vector>

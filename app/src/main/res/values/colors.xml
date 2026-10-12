@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary -->
+    <color name="primary">#4F46E5</color>
+    <color name="on_primary">#FFFFFF</color>
+    <color name="primary_container">#EEF2FF</color>
+    <color name="on_primary_container">#312E81</color>
+
+    <!-- Surfaces & Backgrounds -->
+    <color name="background">#F8FAFC</color>
+    <color name="on_background">#0F172A</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="on_surface">#0F172A</color>
+    <color name="surface_variant">#F1F5F9</color>
+    <color name="on_surface_variant">#475569</color>
+    <color name="card_surface">#FFFFFF</color>
+
+    <!-- Outlines & Borders -->
+    <color name="outline">#E2E8F0</color>
+    <color name="outline_variant">#F1F5F9</color>
+
+    <!-- Typography -->
+    <color name="text_primary">#0F172A</color>
+    <color name="text_secondary">#64748B</color>
+    <color name="text_tertiary">#94A3B8</color>
+
+    <!-- Status & Badges -->
+    <color name="status_active">#10B981</color>
+    <color name="status_active_container">#ECFDF5</color>
+    <color name="status_inactive">#94A3B8</color>
+    <color name="status_inactive_container">#F1F5F9</color>
+
+    <!-- App Accents (Brand Identity) -->
+    <!-- 红果短剧 (Coral Red) -->
+    <color name="brand_hongguo">#EF4444</color>
+    <color name="brand_hongguo_container">#FEE2E2</color>
+    <color name="brand_hongguo_on_container">#991B1B</color>
+
+    <!-- 番茄小说 (Vibrant Orange) -->
+    <color name="brand_fanqie">#F97316</color>
+    <color name="brand_fanqie_container">#FFEDD5</color>
+    <color name="brand_fanqie_on_container">#9A3412</color>
+
+    <!-- 哔哩哔哩 (Bili Pink/Cyan) -->
+    <color name="brand_bili">#FB7299</color>
+    <color name="brand_bili_container">#FCE7F3</color>
+    <color name="brand_bili_on_container">#9D174D</color>
+
+    <!-- Dark Accents for Hero Header -->
+    <color name="hero_bg_start">#1E1B4B</color>
+    <color name="hero_bg_end">#312E81</color>
+    <color name="hero_text_title">#FFFFFF</color>
+    <color name="hero_text_subtitle">#C7D2FE</color>
+</resources>

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Brand Primary -->
+    <color name="primary">#818CF8</color>
+    <color name="on_primary">#0F172A</color>
+    <color name="primary_container">#312E81</color>
+    <color name="on_primary_container">#E0E7FF</color>
+
+    <!-- Surfaces & Backgrounds -->
+    <color name="background">#0B0F19</color>
+    <color name="on_background">#F8FAFC</color>
+    <color name="surface">#131B2E</color>
+    <color name="on_surface">#F8FAFC</color>
+    <color name="surface_variant">#1E293B</color>
+    <color name="on_surface_variant">#94A3B8</color>
+    <color name="card_surface">#151E33</color>
+
+    <!-- Outlines & Borders -->
+    <color name="outline">#26334D</color>
+    <color name="outline_variant">#1E293B</color>
+
+    <!-- Typography -->
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_tertiary">#64748B</color>
+
+    <!-- Status & Badges -->
+    <color name="status_active">#34D399</color>
+    <color name="status_active_container">#064E3B</color>
+    <color name="status_inactive">#64748B</color>
+    <color name="status_inactive_container">#1E293B</color>
+
+    <!-- App Accents (Brand Identity - Night) -->
+    <!-- 红果短剧 -->
+    <color name="brand_hongguo">#F87171</color>
+    <color name="brand_hongguo_container">#451212</color>
+    <color name="brand_hongguo_on_container">#FECACA</color>
+
+    <!-- 番茄小说 -->
+    <color name="brand_fanqie">#FB923C</color>
+    <color name="brand_fanqie_container">#431807</color>
+    <color name="brand_fanqie_on_container">#FED7AA</color>
+
+    <!-- 哔哩哔哩 -->
+    <color name="brand_bili">#F472B6</color>
+    <color name="brand_bili_container">#4C0526</color>
+    <color name="brand_bili_on_container">#FBCFE8</color>
+
+    <!-- Hero Header in Night -->
+    <color name="hero_bg_start">#0F172A</color>
+    <color name="hero_bg_end">#1E1B4B</color>
+    <color name="hero_text_title">#FFFFFF</color>
+    <color name="hero_text_subtitle">#A5B4FC</color>
+</resources>

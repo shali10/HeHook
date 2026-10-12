@@ -1,9 +1,64 @@
 <resources>
-    <string name="app_name">HeHook 聚合助手</string>
+    <string name="app_name">HeHook</string>
+    <string name="app_full_title">HeHook 聚合助手</string>
+    <string name="app_subtitle">全版本通杀 · 一站式聚合增强</string>
 
     <string-array name="xposed_scope">
         <item>com.phoenix.read</item>
         <item>com.dragon.read</item>
         <item>tv.danmaku.bili</item>
     </string-array>
+
+    <!-- Header Stats -->
+    <string name="status_module_active">LSPosed 模块已就绪</string>
+    <string name="status_module_spec">LibXposed API 101 标准规范</string>
+    <string name="stat_apps_count">3</string>
+    <string name="stat_apps_label">托管应用</string>
+    <string name="stat_rules_count">11</string>
+    <string name="stat_rules_label">增强策略</string>
+    <string name="stat_engine_name">DexKit</string>
+    <string name="stat_engine_label">C++ 匹配内核</string>
+
+    <!-- Quick Actions -->
+    <string name="action_restart_all">重启受控应用</string>
+    <string name="action_about">关于模块</string>
+    <string name="action_restart_single">重启生效</string>
+
+    <!-- Installed States -->
+    <string name="state_installed">已安装</string>
+    <string name="state_not_installed">未安装</string>
+
+    <!-- HongGuo -->
+    <string name="hongguo_title">红果免费短剧</string>
+    <string name="hongguo_pkg">com.phoenix.read</string>
+    <string name="hongguo_1080p_title">强制 1080P 超清画质</string>
+    <string name="hongguo_1080p_desc">锁定最高分辨率流，拦截动态弱网降质</string>
+    <string name="hongguo_vip_title">免广与特权注入</string>
+    <string name="hongguo_vip_desc">绕过激励视频等待，解锁沉浸式无打扰播放</string>
+    <string name="hongguo_ads_title">全域广告与动态卡片截断</string>
+    <string name="hongguo_ads_desc">过滤贴片广告、暂停浮层与 Lynx 推广组件</string>
+    <string name="hongguo_hotfix_title">屏蔽官方热更新对抗</string>
+    <string name="hongguo_hotfix_desc">阻止字节 Reparo 补丁热覆盖本地拦截点</string>
+
+    <!-- FanQie -->
+    <string name="fanqie_title">番茄免费小说</string>
+    <string name="fanqie_pkg">com.dragon.read</string>
+    <string name="fanqie_vip_title">免广阅读特权</string>
+    <string name="fanqie_vip_desc">开启官方纯净阅读流，消除章节翻页等待</string>
+    <string name="fanqie_ads_title">去除插页与末尾广告</string>
+    <string name="fanqie_ads_desc">净化章节末尾全屏广告与小说信息流推广</string>
+    <string name="fanqie_tts_title">解锁高品质 AI 听书音色</string>
+    <string name="fanqie_tts_desc">免会员试听限制，自由选用多角色拟真情感音色</string>
+    <string name="fanqie_pendant_title">隐藏金币福袋悬浮挂件</string>
+    <string name="fanqie_pendant_desc">移除阅读页与书架界面的动态弹窗与悬浮球</string>
+
+    <!-- BiliBili -->
+    <string name="bili_title">哔哩哔哩</string>
+    <string name="bili_pkg">tv.danmaku.bili</string>
+    <string name="bili_splash_title">秒过 / 拦截开屏广告</string>
+    <string name="bili_splash_desc">阻断冷热启动 Commercial 闪屏，直入主界面</string>
+    <string name="bili_feed_title">净化首页推荐流卡片</string>
+    <string name="bili_feed_desc">精准剔除带有广告/推广标识的信息流推荐卡</string>
+    <string name="bili_bg_play_title">解锁后台音频播放</string>
+    <string name="bili_bg_play_desc">锁屏或切后台时保持音频持续播放不中断</string>
 </resources>
