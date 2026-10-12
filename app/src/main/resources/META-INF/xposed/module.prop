@@ -1,0 +1,9 @@
+id=top.multihook.app
+name=MultiHook 聚合助手
+version=v1.0.0
+versionCode=100
+author=小禾
+description=一站式多应用聚合增强模块（红果短剧、番茄小说、哔哩哔哩全版本通杀）
+minApiVersion=101
+targetApiVersion=101
+staticScope=false
