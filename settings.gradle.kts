@@ -15,5 +15,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MultiHook"
+rootProject.name = "HeHook"
 include(":app")

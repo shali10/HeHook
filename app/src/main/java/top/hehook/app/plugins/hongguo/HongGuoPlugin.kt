@@ -1,6 +1,6 @@
-package top.multihook.app.plugins.hongguo
+package top.hehook.app.plugins.hongguo
 
-import top.multihook.app.core.BasePlugin
+import top.hehook.app.core.BasePlugin
 import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 

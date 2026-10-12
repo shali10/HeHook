@@ -1,6 +1,6 @@
-package top.multihook.app.plugins.fanqie
+package top.hehook.app.plugins.fanqie
 
-import top.multihook.app.core.BasePlugin
+import top.hehook.app.core.BasePlugin
 import java.lang.reflect.Method
 
 /**

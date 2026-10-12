@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MultiHook 聚合助手</string>
+    <string name="app_name">HeHook 聚合助手</string>
 
     <string-array name="xposed_scope">
         <item>com.phoenix.read</item>

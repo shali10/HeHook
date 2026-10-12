@@ -1,6 +1,6 @@
 # 保留 Xposed 模块入口
--keep class top.multihook.app.core.MainRouter { *; }
--keep class top.multihook.app.core.LegacyInit { *; }
+-keep class top.hehook.app.core.MainRouter { *; }
+-keep class top.hehook.app.core.LegacyInit { *; }
 
 # 保留 DexKit 相关类与 JNI 符号
 -keep class org.luckypray.dexkit.** { *; }

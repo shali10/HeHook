@@ -1,9 +1,9 @@
-package top.multihook.app.core
+package top.hehook.app.core
 
 import android.util.Log
-import top.multihook.app.plugins.bilibili.BiliBiliPlugin
-import top.multihook.app.plugins.fanqie.FanQiePlugin
-import top.multihook.app.plugins.hongguo.HongGuoPlugin
+import top.hehook.app.plugins.bilibili.BiliBiliPlugin
+import top.hehook.app.plugins.fanqie.FanQiePlugin
+import top.hehook.app.plugins.hongguo.HongGuoPlugin
 import java.lang.reflect.Method
 
 /**
@@ -11,7 +11,7 @@ import java.lang.reflect.Method
  */
 class LegacyInit {
     companion object {
-        private const val TAG = "MultiHook_Legacy"
+        private const val TAG = "HeHook_Legacy"
     }
 
     // 由老框架反射调用 handleLoadPackage

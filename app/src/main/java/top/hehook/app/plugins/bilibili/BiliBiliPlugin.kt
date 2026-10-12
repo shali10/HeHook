@@ -1,6 +1,6 @@
-package top.multihook.app.plugins.bilibili
+package top.hehook.app.plugins.bilibili
 
-import top.multihook.app.core.BasePlugin
+import top.hehook.app.core.BasePlugin
 
 /**
  * 哔哩哔哩 (tv.danmaku.bili) 增强插件

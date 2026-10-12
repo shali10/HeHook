@@ -4,11 +4,11 @@ plugins {
 }
 
 android {
-    namespace = "top.multihook.app"
+    namespace = "top.hehook.app"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "top.multihook.app"
+        applicationId = "top.hehook.app"
         minSdk = 26
         targetSdk = 34
         versionCode = 100
@@ -22,6 +22,7 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("debug")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

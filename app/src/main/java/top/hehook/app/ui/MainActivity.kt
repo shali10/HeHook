@@ -1,12 +1,12 @@
-package top.multihook.app.ui
+package top.hehook.app.ui
 
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import top.multihook.app.core.ConfigManager
-import top.multihook.app.databinding.ActivityMainBinding
+import top.hehook.app.core.ConfigManager
+import top.hehook.app.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 

@@ -14,7 +14,7 @@
             android:id="@+id/toolbar"
             android:layout_width="match_parent"
             android:layout_height="?attr/actionBarSize"
-            app:title="MultiHook 聚合助手"
+            app:title="HeHook 聚合助手"
             app:titleTextColor="#1F2937" />
 
     </com.google.android.material.appbar.AppBarLayout>

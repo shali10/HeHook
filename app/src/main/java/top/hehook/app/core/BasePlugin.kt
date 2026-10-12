@@ -1,4 +1,4 @@
-package top.multihook.app.core
+package top.hehook.app.core
 
 import android.content.Context
 import android.util.Log
@@ -14,7 +14,7 @@ abstract class BasePlugin(
     val packageName: String,
     val classLoader: ClassLoader
 ) {
-    val tag: String = "MultiHook_${javaClass.simpleName}"
+    val tag: String = "HeHook_${javaClass.simpleName}"
     var appContext: Context? = null
 
     // 延迟初始化 DexKit C++ 模式匹配桥接器

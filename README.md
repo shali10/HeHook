@@ -1,4 +1,4 @@
-# MultiHook - 一站式现代 LSPosed 多应用聚合增强模块
+# HeHook - 一站式现代 LSPosed 多应用聚合增强模块
 
 基于 **LibXposed (API 101)** 与 **DexKit** 构建的工业级 Android Hook 聚合框架。一个模块同时覆盖多款主流 App，支持全版本混淆模式匹配与通杀。
 

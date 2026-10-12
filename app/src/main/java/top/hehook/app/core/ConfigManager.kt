@@ -1,4 +1,4 @@
-package top.multihook.app.core
+package top.hehook.app.core
 
 import android.content.Context
 import android.os.Environment
@@ -12,7 +12,7 @@ import java.util.Properties
  * 路径: /sdcard/Android/media/<packageName>/multihook.conf
  */
 object ConfigManager {
-    private const val TAG = "MultiHook_Config"
+    private const val TAG = "HeHook_Config"
     private val memoryCache = mutableMapOf<String, String>()
 
     fun getBoolean(packageName: String, key: String, defaultValue: Boolean = true): Boolean {
@@ -69,7 +69,7 @@ object ConfigManager {
     private fun saveProps(packageName: String, props: Properties) {
         val file = getConfigFile(packageName)
         try {
-            file.outputStream().use { props.store(it, "MultiHook Configuration") }
+            file.outputStream().use { props.store(it, "HeHook Configuration") }
         } catch (e: Throwable) {
             Log.e(TAG, "Failed to save config for $packageName", e)
         }
