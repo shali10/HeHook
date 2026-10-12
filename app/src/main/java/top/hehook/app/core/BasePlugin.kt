@@ -2,7 +2,9 @@ package top.hehook.app.core
 
 import android.content.Context
 import android.util.Log
+import io.github.libxposed.api.XposedInterface
 import org.luckypray.dexkit.DexKitBridge
+import java.lang.reflect.Executable
 import java.lang.reflect.Member
 import java.lang.reflect.Method
 
@@ -22,7 +24,6 @@ abstract class BasePlugin(
     val dexKit: DexKitBridge
         get() {
             if (_dexKit == null) {
-                // 加载目标宿主 apk 的 dexkit
                 System.loadLibrary("dexkit")
                 _dexKit = DexKitBridge.create(classLoader, false)
             }
@@ -33,6 +34,36 @@ abstract class BasePlugin(
      * 核心生命周期入口
      */
     abstract fun handleHook()
+
+    /**
+     * 真正挂载拦截器 (LibXposed 原生 Hook)
+     */
+    fun hookMethod(method: Member, hooker: (XposedInterface.Chain) -> Any?) {
+        if (method is Executable) {
+            try {
+                MainRouter.instance.hook(method).intercept { chain ->
+                    hooker(chain)
+                }
+                log("Intercepted: ${method.declaringClass.name}#${method.name}")
+            } catch (t: Throwable) {
+                logError("Failed to intercept ${method.name}", t)
+            }
+        }
+    }
+
+    /**
+     * 替换方法返回值（直接返回固定常量，跳过原方法）
+     */
+    fun replaceMethod(method: Member, returnValue: Any?) {
+        hookMethod(method) { returnValue }
+    }
+
+    /**
+     * 拦截阻断方法执行（用于 void 方法或取消显示）
+     */
+    fun blockMethod(method: Member) {
+        hookMethod(method) { null }
+    }
 
     /**
      * 读取自身配置开关
@@ -55,9 +86,9 @@ abstract class BasePlugin(
     inline fun safeRun(actionName: String, block: () -> Unit) {
         try {
             block()
-            log("Hook success: $actionName")
+            log("Hook block executed: $actionName")
         } catch (t: Throwable) {
-            logError("Hook failed: $actionName", t)
+            logError("Hook block failed: $actionName", t)
         }
     }
 }

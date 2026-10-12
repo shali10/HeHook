@@ -35,13 +35,16 @@ class BiliBiliPlugin(
      */
     private fun hookSplashAd() = safeRun("SplashAd") {
         try {
-            // 通过 DexKit 检索包含 "splash_ad" 或 "splash" 逻辑的广告拉取器
             val splashMethods = dexKit.findMethod {
                 matcher {
                     usingStrings("splash", "show_splash")
                 }
             }
-            log("Found ${splashMethods.size} splash candidates in BiliBili")
+            for (m in splashMethods) {
+                val methodInstance = m.getMethodInstance(classLoader)
+                blockMethod(methodInstance)
+                log("Blocked BiliBili Splash method: ${m.className}#${m.name}")
+            }
         } catch (t: Throwable) {
             logError("Failed to find splash ad methods", t)
         }
@@ -52,13 +55,16 @@ class BiliBiliPlugin(
      */
     private fun hookFeedAds() = safeRun("FeedAds") {
         try {
-            // 模式匹配 B站卡片数据模型中的 ad_info 标识
             val adItemMethods = dexKit.findMethod {
                 matcher {
                     usingStrings("ad_info", "goto_ad")
                 }
             }
-            log("Found ${adItemMethods.size} feed ad parsers in BiliBili")
+            for (m in adItemMethods) {
+                val methodInstance = m.getMethodInstance(classLoader)
+                replaceMethod(methodInstance, null)
+                log("Blocked BiliBili Feed Ad method: ${m.className}#${m.name}")
+            }
         } catch (t: Throwable) {
             logError("Failed to find feed ad methods", t)
         }
@@ -69,7 +75,6 @@ class BiliBiliPlugin(
      */
     private fun hookBackgroundPlayback() = safeRun("BackgroundPlayback") {
         try {
-            // 拦截播放器失焦暂停逻辑
             log("Configuring BiliBili background audio playback")
         } catch (_: Throwable) {}
     }

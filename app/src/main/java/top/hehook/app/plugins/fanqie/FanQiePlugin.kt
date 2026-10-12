@@ -41,19 +41,21 @@ class FanQiePlugin(
      */
     private fun hookReaderVip() = safeRun("ReaderVip") {
         try {
-            // 番茄小说的核心账号管理器
-            val acctManagerCls = classLoader.loadClass("com.dragon.read.user.AcctManager")
-            log("Loaded AcctManager: ${acctManagerCls.name}")
-
-            // Hook 核心 VIP 判断
             val nsVipCls = classLoader.loadClass("com.dragon.read.component.biz.impl.NsVipImpl")
             for (m in nsVipCls.declaredMethods) {
-                if (m.name in listOf("isVip", "isAnyVip", "canReadPaidBook", "isVipEnable")) {
-                    log("Hooked FanQie NsVipImpl.${m.name} -> true")
+                when (m.name) {
+                    "isVip", "isAnyVip", "canReadPaidBook", "isVipEnable", "canReadPaidBookEnhance" -> {
+                        replaceMethod(m, true)
+                        log("Replaced FanQie NsVipImpl.${m.name} -> true")
+                    }
+                    "isNormalUser", "audioIsPubPay" -> {
+                        replaceMethod(m, false)
+                        log("Replaced FanQie NsVipImpl.${m.name} -> false")
+                    }
                 }
             }
-        } catch (t: Throwable) {
-            log("Fallback to DexKit searching reader privilege methods")
+        } catch (_: Throwable) {
+            log("NsVipImpl not found, trying fallback")
         }
     }
 
@@ -62,16 +64,14 @@ class FanQiePlugin(
      */
     private fun hookReaderAdBlock() = safeRun("ReaderAdBlock") {
         try {
-            // 使用 DexKit 动态查找广告配置类：包含 "feed_ad" 或 "page_ad" 标志的方法
-            val adMethods = dexKit.findMethod {
-                matcher {
-                    usingStrings("feed_ad_dislike", "ad_cell")
+            val feedDrawCls = classLoader.loadClass("com.dragon.read.ad.feeddraw.FeedDrawAdManager")
+            for (m in feedDrawCls.declaredMethods) {
+                if (m.name == "getAd") {
+                    replaceMethod(m, null)
+                    log("Blocked FanQie FeedDrawAdManager.getAd -> null")
                 }
             }
-            log("Found ${adMethods.size} reader ad candidate methods via DexKit")
-        } catch (t: Throwable) {
-            logError("Failed to find reader ad classes", t)
-        }
+        } catch (_: Throwable) {}
     }
 
     /**
@@ -79,14 +79,15 @@ class FanQiePlugin(
      */
     private fun hookTtsTimbre() = safeRun("TtsTimbre") {
         try {
-            // 搜索听书音色鉴权模型（包含 isVipTimbre / isFree 等方法）
             val timbreMethods = dexKit.findMethod {
                 matcher {
                     name = "isVipTimbre"
                 }
             }
             for (m in timbreMethods) {
-                log("Hooked TTS Timbre permission: ${m.className}#${m.methodName} -> false (Free to use)")
+                val methodInstance = m.getMethodInstance(classLoader)
+                replaceMethod(methodInstance, false)
+                log("Replaced isVipTimbre -> false for ${m.className}")
             }
         } catch (_: Throwable) {}
     }
@@ -97,7 +98,12 @@ class FanQiePlugin(
     private fun hookHidePendant() = safeRun("HidePendant") {
         try {
             val pendantCls = classLoader.loadClass("com.bytedance.ug.sdk.novel.pendant.PlanPendantServiceImpl")
-            log("Hooked FanQie Pendant Service: ${pendantCls.name}")
+            for (m in pendantCls.declaredMethods) {
+                if (m.name == "triggerEvent") {
+                    blockMethod(m)
+                    log("Blocked FanQie Pendant triggerEvent")
+                }
+            }
         } catch (_: Throwable) {}
     }
 }

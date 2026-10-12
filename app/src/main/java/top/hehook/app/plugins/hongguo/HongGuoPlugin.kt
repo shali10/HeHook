@@ -2,11 +2,10 @@ package top.hehook.app.plugins.hongguo
 
 import top.hehook.app.core.BasePlugin
 import java.lang.reflect.Method
-import java.lang.reflect.Modifier
 
 /**
  * 红果短剧 (com.phoenix.read) 增强插件
- * 支持全版本通杀 Hook：1080P 画质锁、免广权益、去除贴片与信息流广告、屏蔽热更新对抗
+ * 全量实装拦截：免广权益、去除贴片与信息流广告、1080P画质强锁、屏蔽热修对抗
  */
 class HongGuoPlugin(
     packageName: String,
@@ -21,7 +20,7 @@ class HongGuoPlugin(
             hookVipAndPrivilege()
         }
 
-        // 2. 视频画质锁 1080P (TTVideoEngine 字节底层视频引擎)
+        // 2. 视频画质锁 1080P (TTVideoEngine)
         if (isEnabled("force_1080p", true)) {
             hookForceMaxResolution()
         }
@@ -38,51 +37,79 @@ class HongGuoPlugin(
     }
 
     /**
-     * 会员与免广权益 Hook
+     * 会员与免广权益 Hook（真实替换返回值）
      */
     private fun hookVipAndPrivilege() = safeRun("VipAndPrivilege") {
-        // NsVipImpl 核心鉴权接口
+        // A. NsVipImpl 核心鉴权接口
         try {
             val nsVipCls = classLoader.loadClass("com.dragon.read.component.biz.impl.NsVipImpl")
             for (m in nsVipCls.declaredMethods) {
                 when (m.name) {
                     "isVip", "isAnyVip", "isVipEnable", "canReadPaidBook",
                     "canReadPaidBookEnhance", "canListenPaidBook" -> {
-                        // 强制返回 true
-                        log("Hooked NsVipImpl.${m.name} -> true")
+                        replaceMethod(m, true)
+                        log("Replaced NsVipImpl.${m.name} -> true")
                     }
                     "isNormalUser", "audioIsPubPay" -> {
-                        // 强制返回 false
-                        log("Hooked NsVipImpl.${m.name} -> false")
+                        replaceMethod(m, false)
+                        log("Replaced NsVipImpl.${m.name} -> false")
                     }
                 }
             }
-        } catch (e: ClassNotFoundException) {
-            // 类名若漂移，使用 DexKit 搜索包含 isVip 且实现特定接口的类
-            log("NsVipImpl not found by name, fallback to DexKit search")
+        } catch (_: Throwable) {
+            log("NsVipImpl not found by name, attempting DexKit search")
         }
+
+        // B. 短剧免广权益类 (com.dragon.read.ad.shortseries.privilege.b)
+        try {
+            val privCls = classLoader.loadClass("com.dragon.read.ad.shortseries.privilege.b")
+            for (m in privCls.declaredMethods) {
+                if (m.returnType == Boolean::class.javaPrimitiveType && m.parameterTypes.isEmpty()) {
+                    replaceMethod(m, true)
+                    log("Replaced Privilege.${m.name} -> true")
+                }
+            }
+        } catch (_: Throwable) {}
     }
 
     /**
-     * 字节 TTVideoEngine 强制最高画质
+     * 字节 TTVideoEngine 强制最高画质 (1080P)
      */
     private fun hookForceMaxResolution() = safeRun("ForceMaxResolution") {
         try {
-            // 通过 DexKit 精准模式搜索：查找同时包含 getCurrentResolution 与 configResolution 的类
-            val engineClasses = dexKit.findMethod {
-                matcher {
-                    name = "configResolution"
+            val resolutionCls = classLoader.loadClass("com.ss.ttvideoengine.Resolution")
+            // 提取 1080P (ExtremelyHigh) 枚举常量
+            var targetRes: Any? = null
+            for (f in resolutionCls.fields) {
+                if (f.name.equals("ExtremelyHigh", ignoreCase = true) || f.name.contains("1080")) {
+                    targetRes = f.get(null)
+                    break
                 }
-            }.map { it.className }.distinct()
+            }
 
-            log("Found TTVideoEngine candidates via DexKit: $engineClasses")
-            for (clsName in engineClasses) {
-                val cls = classLoader.loadClass(clsName)
-                for (m in cls.declaredMethods) {
-                    if (m.name == "configResolution" && m.parameterTypes.size == 1) {
-                        log("Hooked Resolution Controller: ${cls.name}#${m.name}")
-                        // 在此处注入：无论宿主传入什么档位，统一替换为 ExtremelyHigh (1080P)
-                    }
+            if (targetRes != null) {
+                val finalRes = targetRes
+                // Hook TTVideoEngine.configResolution(Resolution)
+                val engineClasses = listOf(
+                    "com.ss.ttvideoengine.TTVideoEngine",
+                    "com.ss.ttvideoengine.TTVideoEngineImpl"
+                )
+                for (name in engineClasses) {
+                    try {
+                        val cls = classLoader.loadClass(name)
+                        for (m in cls.declaredMethods) {
+                            if (m.name == "configResolution" && m.parameterTypes.size == 1) {
+                                hookMethod(m) { chain ->
+                                    val newArgs = chain.args.toTypedArray()
+                                    if (newArgs.isNotEmpty()) {
+                                        newArgs[0] = finalRes
+                                    }
+                                    chain.proceed(newArgs)
+                                }
+                                log("Hooked configResolution on $name")
+                            }
+                        }
+                    } catch (_: Throwable) {}
                 }
             }
         } catch (t: Throwable) {
@@ -94,17 +121,57 @@ class HongGuoPlugin(
      * 拦截短剧贴片与 Lynx 卡片广告
      */
     private fun hookRemoveAds() = safeRun("RemoveAds") {
-        // 1. 贴片广告配置关停
+        // 1. 一站式短剧广告核心拦截 (y 方法拦截不出广告)
         try {
-            val patchConfigCls = classLoader.loadClass("com.dragon.read.base.ssconfig.settings.interfaces.ISeriesPatchAdConfig\$\$Impl")
-            val getConfigMethod = patchConfigCls.getDeclaredMethod("getConfig")
-            log("Hooked SeriesPatchAdConfig: ${getConfigMethod.name}")
+            val sdkAdapterCls = classLoader.loadClass("com.dragon.read.ad.onestop.seriessdk.adapter.j")
+            for (m in sdkAdapterCls.declaredMethods) {
+                if (m.returnType == Boolean::class.javaPrimitiveType) {
+                    replaceMethod(m, false)
+                    log("Blocked OneStop SeriesSDK Ad: ${m.name} -> false")
+                }
+            }
         } catch (_: Throwable) {}
 
-        // 2. 拦截 Lynx 卡片页绑定
+        // 2. 贴片广告展示口拦截 (l4.M0 拦截)
+        try {
+            val l4Cls = classLoader.loadClass("com.dragon.read.component.shortvideo.impl.inject.view.l4")
+            for (m in l4Cls.declaredMethods) {
+                blockMethod(m)
+                log("Blocked Patch Ad View: ${m.name}")
+            }
+        } catch (_: Throwable) {}
+
+        // 3. 拦截 Lynx 卡片页绑定 (LynxCardHolder.onBind)
         try {
             val lynxHolderCls = classLoader.loadClass("com.dragon.read.component.biz.impl.holder.LynxCardHolder")
-            log("Hooked LynxCardHolder to prevent in-stream ad card rendering")
+            for (m in lynxHolderCls.declaredMethods) {
+                if (m.name == "onBind" || m.name == "h4") {
+                    blockMethod(m)
+                    log("Blocked LynxCardHolder: ${m.name}")
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 4. 电商带货卡与商品面板拦截
+        try {
+            val ecomBizCls = classLoader.loadClass("com.dragon.read.component.shortvideo.impl.sameproduct.aiseed.EcomAiProductSeedingBiz")
+            for (m in ecomBizCls.declaredMethods) {
+                if (m.name == "D") {
+                    blockMethod(m)
+                    log("Blocked Ecom Product Seeding Biz.D")
+                }
+            }
+        } catch (_: Throwable) {}
+
+        // 5. 老版信息流广告拦截 (FeedDrawAdManager.getAd -> null)
+        try {
+            val feedDrawCls = classLoader.loadClass("com.dragon.read.ad.feeddraw.FeedDrawAdManager")
+            for (m in feedDrawCls.declaredMethods) {
+                if (m.name == "getAd") {
+                    replaceMethod(m, null)
+                    log("Blocked FeedDrawAdManager.getAd -> null")
+                }
+            }
         } catch (_: Throwable) {}
     }
 
@@ -116,7 +183,18 @@ class HongGuoPlugin(
             val reparoService = classLoader.loadClass("com.dragon.read.base.hotfix.ReparoHotFixInitServiceImpl")
             for (m in reparoService.declaredMethods) {
                 if (m.name == "loadRemotePatch") {
+                    blockMethod(m)
                     log("Blocked ReparoHotFixInitServiceImpl#loadRemotePatch")
+                }
+            }
+        } catch (_: Throwable) {}
+
+        try {
+            val reparoCfg = classLoader.loadClass("com.bytedance.reparo.IReparoConfig")
+            for (m in reparoCfg.declaredMethods) {
+                if (m.name == "enable" || m.name == "autoFetchPatch") {
+                    replaceMethod(m, false)
+                    log("Disabled Reparo Config: ${m.name} -> false")
                 }
             }
         } catch (_: Throwable) {}
