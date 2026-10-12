@@ -65,7 +65,7 @@ class FanQiePlugin(
             // 使用 DexKit 动态查找广告配置类：包含 "feed_ad" 或 "page_ad" 标志的方法
             val adMethods = dexKit.findMethod {
                 matcher {
-                    usingStrings = listOf("feed_ad_dislike", "ad_cell")
+                    usingStrings("feed_ad_dislike", "ad_cell")
                 }
             }
             log("Found ${adMethods.size} reader ad candidate methods via DexKit")
@@ -81,7 +81,9 @@ class FanQiePlugin(
         try {
             // 搜索听书音色鉴权模型（包含 isVipTimbre / isFree 等方法）
             val timbreMethods = dexKit.findMethod {
-                methodName = "isVipTimbre"
+                matcher {
+                    name = "isVipTimbre"
+                }
             }
             for (m in timbreMethods) {
                 log("Hooked TTS Timbre permission: ${m.className}#${m.methodName} -> false (Free to use)")

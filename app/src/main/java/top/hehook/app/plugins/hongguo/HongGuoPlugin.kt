@@ -70,7 +70,9 @@ class HongGuoPlugin(
         try {
             // 通过 DexKit 精准模式搜索：查找同时包含 getCurrentResolution 与 configResolution 的类
             val engineClasses = dexKit.findMethod {
-                methodName = "configResolution"
+                matcher {
+                    name = "configResolution"
+                }
             }.map { it.className }.distinct()
 
             log("Found TTVideoEngine candidates via DexKit: $engineClasses")

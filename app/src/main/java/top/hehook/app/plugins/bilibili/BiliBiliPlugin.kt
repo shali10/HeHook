@@ -38,7 +38,7 @@ class BiliBiliPlugin(
             // 通过 DexKit 检索包含 "splash_ad" 或 "splash" 逻辑的广告拉取器
             val splashMethods = dexKit.findMethod {
                 matcher {
-                    usingStrings = listOf("splash", "show_splash")
+                    usingStrings("splash", "show_splash")
                 }
             }
             log("Found ${splashMethods.size} splash candidates in BiliBili")
@@ -55,7 +55,7 @@ class BiliBiliPlugin(
             // 模式匹配 B站卡片数据模型中的 ad_info 标识
             val adItemMethods = dexKit.findMethod {
                 matcher {
-                    usingStrings = listOf("ad_info", "goto_ad")
+                    usingStrings("ad_info", "goto_ad")
                 }
             }
             log("Found ${adItemMethods.size} feed ad parsers in BiliBili")

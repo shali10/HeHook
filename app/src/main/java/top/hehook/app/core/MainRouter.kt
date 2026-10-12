@@ -4,7 +4,7 @@ import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
-import io.github.libxposed.api.XposedModuleInterface.PackageLoadedParam
+import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import top.hehook.app.plugins.bilibili.BiliBiliPlugin
 import top.hehook.app.plugins.fanqie.FanQiePlugin
 import top.hehook.app.plugins.hongguo.HongGuoPlugin
@@ -25,19 +25,18 @@ class MainRouter(
 
     init {
         instance = this
-        Log.i(TAG, "HeHook Module Loaded. API version: ${param.apiVersion}")
+        Log.i(TAG, "HeHook Module Loaded into process.")
     }
 
-    override fun onPackageLoaded(param: PackageLoadedParam) {
-        super.onPackageLoaded(param)
+    override fun onPackageReady(param: PackageReadyParam) {
+        super.onPackageReady(param)
 
-        // 仅处理第一进程或主进程，避免无意义注入
         val pkg = param.packageName
         val cl = param.classLoader
 
-        Log.i(TAG, "onPackageLoaded -> $pkg (isFirstPackage: ${param.isFirstPackage})")
+        Log.i(TAG, "onPackageReady -> $pkg (isFirstPackage: ${param.isFirstPackage})")
 
-        // 核心分发路由
+        // 核心分发路由：根据宿主包名，精确分发给各自独立的子模块
         val plugin: BasePlugin? = when (pkg) {
             "com.phoenix.read" -> HongGuoPlugin(pkg, cl)
             "com.dragon.read" -> FanQiePlugin(pkg, cl)
