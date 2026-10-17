@@ -4,6 +4,7 @@ import android.util.Log
 import top.hehook.app.plugins.bilibili.BiliBiliPlugin
 import top.hehook.app.plugins.fanqie.FanQiePlugin
 import top.hehook.app.plugins.hongguo.HongGuoPlugin
+import top.hehook.app.plugins.luna.LunaMusicPlugin
 import java.lang.reflect.Method
 
 /**
@@ -27,6 +28,7 @@ class LegacyInit {
                 "com.phoenix.read" -> HongGuoPlugin(pkg, cl)
                 "com.dragon.read" -> FanQiePlugin(pkg, cl)
                 "tv.danmaku.bili" -> BiliBiliPlugin(pkg, cl)
+                "com.luna.music" -> LunaMusicPlugin(pkg, cl)
                 else -> null
             }
 
