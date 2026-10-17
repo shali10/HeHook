@@ -66,7 +66,7 @@ class ByteDanceReadEngine(
         }
 
         // B. IAdAvailableConfig$$Impl 配置拦截 -> 全部可用性字段设为 false
-        val availCfgCls = HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig" + "$$Impl")
+        val availCfgCls = HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig\u0024\u0024Impl")
             ?: HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig")
         if (availCfgCls != null) {
             HookKit.hookAllAfterByName(availCfgCls, "getConfig") { _, result, _ ->
@@ -208,7 +208,7 @@ class ByteDanceReadEngine(
         }
 
         // C. 贴片开关与展示口
-        val patchCfgCls = HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.ISeriesPatchAdConfig" + "$$Impl")
+        val patchCfgCls = HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.ISeriesPatchAdConfig\u0024\u0024Impl")
             ?: HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.ISeriesPatchAdConfig")
         if (patchCfgCls != null) {
             HookKit.hookAllAfterByName(patchCfgCls, "getConfig") { _, result, _ ->
@@ -239,7 +239,7 @@ class ByteDanceReadEngine(
             plugin.log("OneStopAd: EcomAiProductSeedingBiz.D skipped")
         }
 
-        val ecCfgCls = HookKit.loadClass(cl, "com.dragon.read.component.shortvideo.impl.sameproduct.config.IShoppingFeed" + "$$Impl")
+        val ecCfgCls = HookKit.loadClass(cl, "com.dragon.read.component.shortvideo.impl.sameproduct.config.IShoppingFeed\u0024\u0024Impl")
         if (ecCfgCls != null) {
             HookKit.hookAllAfterByName(ecCfgCls, "getConfig") { _, result, _ ->
                 if (result != null) {
