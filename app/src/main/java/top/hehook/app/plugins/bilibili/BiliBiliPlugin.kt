@@ -5,8 +5,13 @@ import top.hehook.app.core.HookKit
 import java.lang.reflect.Method
 
 /**
- * 哔哩哔哩 (tv.danmaku.bili) 增强插件
- * 支持：秒过开屏广告、首页推荐流广告卡片剔除、视频播放页底栏广告净化、后台播放解锁
+ * 哔哩哔哩 (tv.danmaku.bili) 增强插件 v1.1.1
+ * 实装：
+ * 1. 开屏广告瞬间秒过 (兼容老版 Splash.isValid + 现代 gRPC SplashListReply 彻底斩首 + SplashActivity 直通)
+ * 2. 大会员与画质特权注入 (HookVip 官方 VipUserInfo / VipExtraUserInfo 双通道 + 现代 View VipInfo)
+ * 3. 首页推荐流广告卡片剔除 (Pegasus bRPC / JSON 双层净化)
+ * 4. 视频播放页底栏与卡片广告净化 (ViewReply / CM)
+ * 5. 后台播放解锁 (PlayerQualityService)
  */
 class BiliBiliPlugin(
     packageName: String,
@@ -14,33 +19,89 @@ class BiliBiliPlugin(
 ) : BasePlugin(packageName, classLoader) {
 
     override fun handleHook() {
-        log("Loading BiliBiliPlugin v1.1.0...")
+        log("Loading BiliBiliPlugin v1.1.1...")
 
         // 1. 去除开屏广告 (秒进首页，保留生日彩蛋)
         if (isEnabled("remove_splash_ad", true)) {
             hookSplashAd()
         }
 
-        // 2. 净化首页推荐流卡片广告
+        // 2. 解锁大会员特权与画质接口 (对标 HookVip，双通道注入)
+        if (isEnabled("unlock_vip", true)) {
+            hookVipPrivilege()
+        }
+
+        // 3. 净化首页推荐流卡片广告
         if (isEnabled("remove_feed_ads", true)) {
             hookFeedAds()
         }
 
-        // 3. 视频详情页卡片与播放器挂载商业广告拦截
+        // 4. 视频详情页卡片与播放器挂载商业广告拦截
         if (isEnabled("remove_feed_ads", true)) {
             hookVideoDetailAds()
         }
 
-        // 4. 解锁后台播放与画质偏好
+        // 5. 解锁后台播放与画质偏好
         if (isEnabled("unlock_background_play", true)) {
             hookBackgroundPlayback()
         }
     }
 
     /**
-     * 开屏广告精准秒过 (拦截 Splash.isValid 判定)
+     * 大会员特权与画质注入 (HookVip 官方精髓 + 现代 gRPC VipInfo 双通道)
+     */
+    private fun hookVipPrivilege() = safeRun("VipPrivilege") {
+        val expireTime = 113143670061000L // 2099+ 年
+
+        // A. 经典账户信息库 VipUserInfo
+        val vipUserCls = HookKit.loadClass(classLoader, "com.bilibili.lib.accountinfo.model.VipUserInfo")
+        if (vipUserCls != null) {
+            HookKit.hookAllByName(vipUserCls, "isEffectiveVip") { it.setResult(true) }
+            HookKit.hookAllByName(vipUserCls, "getVipType") { it.setResult(2) } // 2: 年度大会员
+            HookKit.hookAllByName(vipUserCls, "getVipStatus") { it.setResult(1) } // 1: 正常
+            HookKit.hookAllByName(vipUserCls, "getVipDueDate") { it.setResult(expireTime) }
+            log("VipPrivilege: VipUserInfo hooked (isEffectiveVip -> true)")
+        }
+
+        // B. 经典账户扩展信息库 VipExtraUserInfo (HookVip 核心)
+        val vipExtraCls = HookKit.loadClass(classLoader, "com.bilibili.lib.accountinfo.model.VipExtraUserInfo")
+        if (vipExtraCls != null) {
+            HookKit.hookAllByName(vipExtraCls, "isEffectiveVip") { it.setResult(true) }
+            HookKit.hookAllByName(vipExtraCls, "getVipType") { it.setResult(2) }
+            HookKit.hookAllByName(vipExtraCls, "getVipStatus") { it.setResult(1) }
+            HookKit.hookAllByName(vipExtraCls, "getVipDueDate") { it.setResult(expireTime) }
+            log("VipPrivilege: VipExtraUserInfo hooked (isEffectiveVip -> true)")
+        }
+
+        // C. 现代视频流 ViewReply 专属 VipInfo (放行 1080P60 / 4K / 杜比视界)
+        val viewVipClasses = listOf(
+            "com.bapis.bilibili.app.view.v1.VipInfo",
+            "com.bapis.bilibili.app.viewunite.v1.VipInfo"
+        )
+        for (cname in viewVipClasses) {
+            val cls = HookKit.loadClass(classLoader, cname) ?: continue
+            HookKit.hookAllByName(cls, "getStatus") { it.setResult(1) }
+            HookKit.hookAllByName(cls, "getType") { it.setResult(2) }
+            HookKit.hookAllByName(cls, "getDueDate") { it.setResult(expireTime) }
+            log("VipPrivilege: $cname hooked")
+        }
+    }
+
+    /**
+     * 开屏广告瞬间秒过 (老版 isValid + 现代 gRPC SplashListReply 斩首 + 展示 Activity 阻断)
      */
     private fun hookSplashAd() = safeRun("SplashAd") {
+        // A. 现代 gRPC 开屏回包斩首 (直接让客户端拿到 0 广告、0 秒等待)
+        val splashReplyCls = HookKit.loadClass(classLoader, "com.bapis.bilibili.app.splash.v1.SplashListReply")
+        if (splashReplyCls != null) {
+            HookKit.hookAllByName(splashReplyCls, "getShowList") { it.setResult(emptyList<Any>()) }
+            HookKit.hookAllByName(splashReplyCls, "getShowCount") { it.setResult(0) }
+            HookKit.hookAllByName(splashReplyCls, "getMaxWaitSec") { it.setResult(0) }
+            HookKit.hookAllByName(splashReplyCls, "hasShow") { it.setResult(false) }
+            log("SplashAd: gRPC SplashListReply zeroed out (no ads, 0s wait)")
+        }
+
+        // B. 经典 Splash.isValid 判定 (HookVip 兼容老版，同时保留生日彩蛋)
         val splashCls = HookKit.loadClass(classLoader, "tv.danmaku.bili.ui.splash.ad.model.Splash")
         if (splashCls != null) {
             var isBirthMethod: Method? = null
@@ -64,11 +125,17 @@ class BiliBiliPlugin(
             log("SplashAd: Splash.isValid hooked -> false (keeps birthday splash)")
         }
 
-        // 兜底开屏展示 Activity
+        // C. 开屏展示 Activity 与展示门禁
         val splashActCls = HookKit.loadClass(classLoader, "tv.danmaku.bili.ui.splash.SplashActivity")
         if (splashActCls != null) {
             HookKit.hookAllByName(splashActCls, "showAd") { it.skip() }
             HookKit.hookAllByName(splashActCls, "checkAd") { it.skip() }
+        }
+
+        val splashMgrCls = HookKit.loadClass(classLoader, "tv.danmaku.bili.ui.splash.ad.SplashAdManager")
+        if (splashMgrCls != null) {
+            HookKit.hookAllByName(splashMgrCls, "isAdAvailable") { it.setResult(false) }
+            HookKit.hookAllByName(splashMgrCls, "canShow") { it.setResult(false) }
         }
     }
 
@@ -91,9 +158,7 @@ class BiliBiliPlugin(
             }
             HookKit.hookAllAfterByName(converterCls, "a") { _, result, _ ->
                 if (result is List<*> && adItemCls != null) {
-                    // 结果列表中剔除 AdItem 实例
                     val filtered = result.filterNotNull().filter { it.javaClass != adItemCls }
-                    // Note: Immutable in afterHook, arg filtering above does primary work
                 }
             }
             log("FeedAds: BrpcRespConverterKt#a card ad filter installed")
@@ -133,30 +198,17 @@ class BiliBiliPlugin(
         if (cmCls != null) {
             HookKit.hookAllByName(cmCls, "hasCmUnderPlayer") { it.setResult(false) }
         }
-
-        // C. 关联推荐流卡片过滤 (RelatesFeedReply)
-        val replyCls = HookKit.loadClass(classLoader, "com.bapis.bilibili.app.viewunite.v1.RelatesFeedReply")
-        if (replyCls != null) {
-            HookKit.hookAllAfterByName(replyCls, "getRelatesList") { _, result, _ ->
-                // Hooked via filter
-            }
-        }
     }
 
     /**
      * 解锁后台播放与画质偏好
      */
     private fun hookBackgroundPlayback() = safeRun("BackgroundPlayback") {
-        // 允许播放器切后台时不暂停音频
         val playerQualityCls = HookKit.loadClass(classLoader, "com.bilibili.playerbizcommon.features.quality.PlayerQualityService")
         if (playerQualityCls != null) {
             HookKit.hookAllByName(playerQualityCls, "isBackgroundPlayEnable") { it.setResult(true) }
             HookKit.hookAllByName(playerQualityCls, "canBackgroundPlay") { it.setResult(true) }
-        }
-
-        val videoDetailsCls = HookKit.loadClass(classLoader, "tv.danmaku.bili.ui.video.VideoDetailsActivity")
-        if (videoDetailsCls != null) {
-            log("BackgroundPlayback: VideoDetailsActivity targeted")
+            log("BackgroundPlayback: PlayerQualityService hooked")
         }
     }
 
@@ -172,6 +224,17 @@ class BiliBiliPlugin(
             }
             m = item.javaClass.methods.firstOrNull { it.name == "hasCm" }
             if (m != null && m.invoke(item) == true) {
+                return true
+            }
+            m = item.javaClass.methods.firstOrNull { it.name == "getCardGoto" }
+            if (m != null) {
+                val cg = m.invoke(item)?.toString() ?: ""
+                if (cg.contains("ad") || cg.contains("banner") || cg.contains("cm")) {
+                    return true
+                }
+            }
+            m = item.javaClass.methods.firstOrNull { it.name == "getGoto" }
+            if (m != null && m.invoke(item)?.toString() == "ad") {
                 return true
             }
         } catch (_: Throwable) {}

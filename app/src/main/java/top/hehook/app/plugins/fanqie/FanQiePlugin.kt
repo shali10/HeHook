@@ -15,7 +15,7 @@ class FanQiePlugin(
 ) : BasePlugin(packageName, classLoader) {
 
     override fun handleHook() {
-        log("Loading FanQiePlugin v1.1.0...")
+        log("Loading FanQiePlugin v1.1.1...")
 
         // 1. 挂载字节阅读平台通用引擎 (AdGate 广告总闸 + PrivilegeManager VIP + 沉浸免广 + 横幅清屏)
         ByteDanceReadEngine(this, isHongGuo = false).installAll()

@@ -15,7 +15,7 @@ class HongGuoPlugin(
 ) : BasePlugin(packageName, classLoader) {
 
     override fun handleHook() {
-        log("Loading HongGuoPlugin v1.1.0...")
+        log("Loading HongGuoPlugin v1.1.1...")
 
         // 1. 挂载字节阅读平台通用引擎 (AdGate 广告总闸 + PrivilegeManager VIP + OneStopAd + 试看清零 + 禁用热修)
         ByteDanceReadEngine(this, isHongGuo = true).installAll()

@@ -1,11 +1,17 @@
 package top.hehook.app.core
 
 import android.util.Log
+import java.lang.reflect.Constructor
 
 /**
- * 字节跳动阅读平台 (com.dragon.read 体系) 聚合增强引擎
+ * 字节跳动阅读平台 (com.dragon.read 体系) 聚合增强引擎 v1.1.1
  * 统一赋能：红果短剧 (com.phoenix.read) 与 番茄免费小说 (com.dragon.read)
- * 实装：AdGate 广告总闸、PrivilegeManager VIP 特权全量穿透、OneStop 智能跳过、试看清零与热修防御
+ * 实装：
+ * 1. VipInfoModel 构造器参数源头劫持 (对标 HookVip，零反射损耗，彻底解决卡顿掉帧)
+ * 2. canThisPositionShow & willShowLynxBanner 语义总闸
+ * 3. OneStop 短剧 y() "短剧中插免广权益生效" 凭证放行
+ * 4. 彻底废除高频反射与单字母模糊 Hook，极速丝滑
+ * 5. 禁用字节在线热修复 Reparo (防下发补丁对抗)
  */
 class ByteDanceReadEngine(
     private val plugin: BasePlugin,
@@ -15,16 +21,16 @@ class ByteDanceReadEngine(
     private val tag = plugin.tag
 
     fun installAll() {
-        plugin.log("Installing ByteDanceReadEngine (isHongGuo=$isHongGuo)...")
+        plugin.log("Installing ByteDanceReadEngine v1.1.1 (isHongGuo=$isHongGuo)...")
 
-        // 1. 广告位置级与 API 总闸 AdGate
-        if (plugin.isEnabled("remove_ads", true) || plugin.isEnabled("remove_reader_ads", true)) {
-            installAdGate()
-        }
-
-        // 2. VIP 鉴权与特权总管 PrivilegeManager + NsVipImpl
+        // 1. VIP 鉴权与源头构造劫持 (核心：彻底告别卡顿)
         if (plugin.isEnabled("unlock_vip", true) || plugin.isEnabled("unlock_reader_vip", true)) {
             installVipPrivilege()
+        }
+
+        // 2. 广告位置级与 API 总闸 AdGate
+        if (plugin.isEnabled("remove_ads", true) || plugin.isEnabled("remove_reader_ads", true)) {
+            installAdGate()
         }
 
         // 3. 一站式短剧广告拦截与卡片过滤 OneStopAd
@@ -32,118 +38,66 @@ class ByteDanceReadEngine(
             installOneStopAndFeedAds()
         }
 
-        // 4. 试看标记字段清零 TrialDataFlags
-        if (plugin.isEnabled("unlock_vip", true) || plugin.isEnabled("unlock_reader_vip", true)) {
-            installTrialDataFlags()
-        }
-
-        // 5. 禁用字节在线热修复 Reparo (防下发补丁对抗)
+        // 4. 禁用字节在线热修复 Reparo (防下发补丁对抗)
         if (plugin.isEnabled("disable_hotfix", true)) {
             installDisableReparo()
         }
     }
 
     /**
-     * 广告位置级总闸 (AdGate)
-     */
-    private fun installAdGate() = plugin.safeRun("AdGate") {
-        // A. NsAdImpl 核心门面拦截
-        val nsAdCls = HookKit.loadClass(cl, "com.dragon.read.component.biz.impl.NsAdImpl")
-        if (nsAdCls != null) {
-            // checkAdAvailable(String, String) -> false
-            HookKit.hookAllByName(nsAdCls, "checkAdAvailable") { chain ->
-                chain.setResult(false)
-            }
-            // openOpeningScreenAdActivity -> skip
-            HookKit.hookAllByName(nsAdCls, "openOpeningScreenAdActivity") { chain ->
-                chain.skip()
-            }
-            // canRetain -> false
-            HookKit.hookAllByName(nsAdCls, "canRetain") { chain ->
-                chain.setResult(false)
-            }
-            plugin.log("AdGate: NsAdImpl checkAdAvailable/openOpeningScreenAdActivity/canRetain hooked")
-        }
-
-        // B. IAdAvailableConfig$$Impl 配置拦截 -> 全部可用性字段设为 false
-        val availCfgCls = HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig\u0024\u0024Impl")
-            ?: HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig")
-        if (availCfgCls != null) {
-            HookKit.hookAllAfterByName(availCfgCls, "getConfig") { _, result, _ ->
-                if (result != null) {
-                    HookKit.zeroField(result, "readerAdAvailable")
-                    HookKit.zeroField(result, "splashAdAvailable")
-                    HookKit.zeroField(result, "shortSeriesAdAvailable")
-                    HookKit.zeroField(result, "otherAdExcludeCoinAvailable")
-                }
-            }
-            plugin.log("AdGate: IAdAvailableConfig getConfig field overrides installed")
-        }
-
-        // C. 横幅广告工具拦截
-        val bannerUtilCls = HookKit.loadClass(cl, "com.dragon.read.ad.banner.manager.BannerAdConfigUtil")
-        if (bannerUtilCls != null) {
-            HookKit.hookAllByName(bannerUtilCls, "enableBanner") { it.setResult(false) }
-            HookKit.hookAllByName(bannerUtilCls, "canRequestBanner") { it.setResult(false) }
-            HookKit.hookAllByName(bannerUtilCls, "a") { it.setResult(false) }
-            HookKit.hookAllByName(bannerUtilCls, "reachMaxCloseCnt") { it.setResult(true) }
-            plugin.log("AdGate: BannerAdConfigUtil hooked")
-        }
-
-        // D. 自然流量横幅请求拦截
-        val bannerNatCls = HookKit.loadClass(cl, "com.dragon.read.ad.banner.manager.ReaderNaturalFlowBannerRequestManager")
-        if (bannerNatCls != null) {
-            HookKit.hookAllByName(bannerNatCls, "requestReaderNaturalFlowBannerIfNeed") { it.skip() }
-        }
-
-        // E. NsUtilsDependImpl
-        val nsUtilsCls = HookKit.loadClass(cl, "com.dragon.read.component.NsUtilsDependImpl")
-        if (nsUtilsCls != null) {
-            HookKit.hookAllByName(nsUtilsCls, "canRetain") { it.setResult(false) }
-        }
-
-        // F. 开屏展示层 OpeningScreenADActivity
-        val splashActCls = HookKit.loadClass(cl, "com.dragon.read.ad.openingscreenad.OpeningScreenADActivity")
-        if (splashActCls != null) {
-            for (m in listOf("showNaturalAdView", "showBrandAdView", "showImcSplashView")) {
-                HookKit.hookAllByName(splashActCls, m) { it.skip() }
-            }
-            plugin.log("AdGate: OpeningScreenADActivity splash views skipped")
-        }
-
-        // G. 混淆位置总闸兜底 (tc3.a / p13.a)
-        val tc3Cls = HookKit.loadClass(cl, "tc3.a")
-        if (tc3Cls != null) {
-            HookKit.hookAllByName(tc3Cls, "b") { it.setResult(false) }
-            HookKit.hookAllByName(tc3Cls, "d") { it.setResult(false) }
-            plugin.log("AdGate: tc3.a position gate hooked")
-        }
-
-        val p13Cls = HookKit.loadClass(cl, "p13.a")
-        if (p13Cls != null) {
-            for (name in listOf("a", "b", "c", "d", "e", "isReaderAdAvailable")) {
-                HookKit.hookAllByName(p13Cls, name) { it.setResult(false) }
-            }
-            plugin.log("AdGate: p13.a tomato view gate hooked")
-        }
-
-        // H. 听书广告服务
-        val audioAdCls = HookKit.loadClass(cl, "com.dragon.read.ad.banner.impl.HongguoAudioAdServiceImpl")
-        if (audioAdCls != null) {
-            HookKit.hookAllByName(audioAdCls, "enableRequestAudioPatchAd") { it.setResult(false) }
-            HookKit.hookAllByName(audioAdCls, "enableRequestAudioInfoFlowAd") { it.setResult(false) }
-        }
-        val audioDynCls = HookKit.loadClass(cl, "com.dragon.read.ad.audioad.DynamicAdServiceImpl")
-        if (audioDynCls != null) {
-            HookKit.hookAllByName(audioDynCls, "preloadLynxViewReal") { it.skip() }
-        }
-    }
-
-    /**
-     * VIP 鉴权与特权总管
+     * VIP 鉴权与特权总管 (源头构造参数劫持 + PrivilegeManager)
      */
     private fun installVipPrivilege() = plugin.safeRun("VipPrivilege") {
-        // A. PrivilegeManager 全局特权拦截
+        // A. 【HookVip 核心精髓】拦截 VipInfoModel 构造函数参数，零反射开销
+        val vipModelCls = HookKit.loadClass(cl, "com.dragon.read.user.model.VipInfoModel")
+        if (vipModelCls != null) {
+            val expireSeconds = 113143670061L // 秒级时间戳 (公元 5555 年)
+            HookKit.hookAllConstructorsBefore(vipModelCls) { ctor, chain ->
+                val args = chain.args
+                if (args.isNotEmpty()) chain.setArg(0, expireSeconds.toString())
+                if (args.size > 1) chain.setArg(1, "1")
+                if (args.size > 2) chain.setArg(2, expireSeconds.toString())
+
+                val paramTypes = ctor.parameterTypes
+                for (i in paramTypes.indices) {
+                    if (paramTypes[i] == java.lang.Boolean.TYPE) {
+                        chain.setArg(i, true)
+                    } else if (paramTypes[i] == java.lang.Integer.TYPE) {
+                        chain.setArg(i, 1000000)
+                    }
+                }
+            }
+            plugin.log("VipPrivilege: VipInfoModel constructor param interception active")
+        }
+
+        // B. 番茄畅听 / 阅读广告模块 VipInfoModel
+        val fmVipCls = HookKit.loadClass(cl, "com.dragon.read.admodule.adfm.vip.VipInfoModel")
+        if (fmVipCls != null) {
+            HookKit.hookAllByName(fmVipCls, "parseResponse") { chain ->
+                val obj = chain.thisObject
+                if (obj != null) {
+                    HookKit.setField(obj, "expireTime", 113143670061000L.toString())
+                    HookKit.setField(obj, "isVip", true)
+                    HookKit.setField(obj, "leftTime", 113143670061L.toString())
+                }
+            }
+            HookKit.hookAllConstructors(fmVipCls) { obj, _ ->
+                HookKit.setField(obj, "expireTime", 113143670061000L.toString())
+                HookKit.setField(obj, "isVip", true)
+                HookKit.setField(obj, "leftTime", 113143670061L.toString())
+            }
+            plugin.log("VipPrivilege: adfm.vip.VipInfoModel hooked")
+        }
+
+        // C. VipPromotionStrategyExtraInfo 剩余时间
+        val promoCls = HookKit.loadClass(cl, "com.dragon.read.rpc.model.VipPromotionStrategyExtraInfo")
+        if (promoCls != null) {
+            HookKit.hookAllConstructors(promoCls) { obj, _ ->
+                HookKit.setField(obj, "leftTime", 113143670061L)
+            }
+        }
+
+        // D. PrivilegeManager 全局特权拦截
         val pmCls = HookKit.loadClass(cl, "com.dragon.read.component.biz.impl.privilege.PrivilegeManager")
         if (pmCls != null) {
             val trueMethods = listOf(
@@ -160,7 +114,7 @@ class ByteDanceReadEngine(
             plugin.log("VipPrivilege: PrivilegeManager full privileges hooked")
         }
 
-        // B. NsVipImpl 核心鉴权接口
+        // E. NsVipImpl 核心鉴权接口
         val nsVipCls = HookKit.loadClass(cl, "com.dragon.read.component.biz.impl.NsVipImpl")
         if (nsVipCls != null) {
             val trueMethods = listOf(
@@ -179,10 +133,104 @@ class ByteDanceReadEngine(
     }
 
     /**
+     * 广告位置级总闸 (AdGate)
+     */
+    private fun installAdGate() = plugin.safeRun("AdGate") {
+        // A. 精准语义广告总闸拦截 (HookVip 核心：willShowLynxBanner & canThisPositionShow)
+        val adGateCandidateClasses = listOf(
+            "com.dragon.read.component.biz.impl.NsAdImpl",
+            "com.dragon.read.ad.banner.manager.BannerAdConfigUtil",
+            "com.dragon.read.ad.adposition.AdPositionManager",
+            "com.dragon.read.ad.shortseries.ShortSeriesAdManager",
+            "com.dragon.read.ad.dynamic.DynamicAdManager"
+        )
+        for (cname in adGateCandidateClasses) {
+            val cls = HookKit.loadClass(cl, cname) ?: continue
+            HookKit.hookAllMatchingMethods(cls, { it.name == "willShowLynxBanner" }) { chain ->
+                chain.setResult(false)
+            }
+            HookKit.hookAllMatchingMethods(cls, { it.name == "canThisPositionShow" }) { chain ->
+                chain.setResult(false)
+            }
+        }
+
+        // B. NsAdImpl 核心门面拦截
+        val nsAdCls = HookKit.loadClass(cl, "com.dragon.read.component.biz.impl.NsAdImpl")
+        if (nsAdCls != null) {
+            HookKit.hookAllByName(nsAdCls, "checkAdAvailable") { chain ->
+                chain.setResult(false)
+            }
+            HookKit.hookAllByName(nsAdCls, "openOpeningScreenAdActivity") { chain ->
+                chain.skip()
+            }
+            HookKit.hookAllByName(nsAdCls, "canRetain") { chain ->
+                chain.setResult(false)
+            }
+            plugin.log("AdGate: NsAdImpl checkAdAvailable/openOpeningScreenAdActivity/canRetain hooked")
+        }
+
+        // C. IAdAvailableConfig$$Impl 配置拦截 -> 全部可用性字段设为 false
+        val availCfgCls = HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig\u0024\u0024Impl")
+            ?: HookKit.loadClass(cl, "com.dragon.read.base.ssconfig.settings.interfaces.IAdAvailableConfig")
+        if (availCfgCls != null) {
+            HookKit.hookAllAfterByName(availCfgCls, "getConfig") { _, result, _ ->
+                if (result != null) {
+                    HookKit.zeroField(result, "readerAdAvailable")
+                    HookKit.zeroField(result, "splashAdAvailable")
+                    HookKit.zeroField(result, "shortSeriesAdAvailable")
+                    HookKit.zeroField(result, "otherAdExcludeCoinAvailable")
+                }
+            }
+            plugin.log("AdGate: IAdAvailableConfig getConfig field overrides installed")
+        }
+
+        // D. 横幅广告工具拦截
+        val bannerUtilCls = HookKit.loadClass(cl, "com.dragon.read.ad.banner.manager.BannerAdConfigUtil")
+        if (bannerUtilCls != null) {
+            HookKit.hookAllByName(bannerUtilCls, "enableBanner") { it.setResult(false) }
+            HookKit.hookAllByName(bannerUtilCls, "canRequestBanner") { it.setResult(false) }
+            HookKit.hookAllByName(bannerUtilCls, "reachMaxCloseCnt") { it.setResult(true) }
+            plugin.log("AdGate: BannerAdConfigUtil hooked")
+        }
+
+        // E. 自然流量横幅请求拦截
+        val bannerNatCls = HookKit.loadClass(cl, "com.dragon.read.ad.banner.manager.ReaderNaturalFlowBannerRequestManager")
+        if (bannerNatCls != null) {
+            HookKit.hookAllByName(bannerNatCls, "requestReaderNaturalFlowBannerIfNeed") { it.skip() }
+        }
+
+        // F. NsUtilsDependImpl
+        val nsUtilsCls = HookKit.loadClass(cl, "com.dragon.read.component.NsUtilsDependImpl")
+        if (nsUtilsCls != null) {
+            HookKit.hookAllByName(nsUtilsCls, "canRetain") { it.setResult(false) }
+        }
+
+        // G. 开屏展示层 OpeningScreenADActivity
+        val splashActCls = HookKit.loadClass(cl, "com.dragon.read.ad.openingscreenad.OpeningScreenADActivity")
+        if (splashActCls != null) {
+            for (m in listOf("showNaturalAdView", "showBrandAdView", "showImcSplashView")) {
+                HookKit.hookAllByName(splashActCls, m) { it.skip() }
+            }
+            plugin.log("AdGate: OpeningScreenADActivity splash views skipped")
+        }
+
+        // H. 听书广告服务
+        val audioAdCls = HookKit.loadClass(cl, "com.dragon.read.ad.banner.impl.HongguoAudioAdServiceImpl")
+        if (audioAdCls != null) {
+            HookKit.hookAllByName(audioAdCls, "enableRequestAudioPatchAd") { it.setResult(false) }
+            HookKit.hookAllByName(audioAdCls, "enableRequestAudioInfoFlowAd") { it.setResult(false) }
+        }
+        val audioDynCls = HookKit.loadClass(cl, "com.dragon.read.ad.audioad.DynamicAdServiceImpl")
+        if (audioDynCls != null) {
+            HookKit.hookAllByName(audioDynCls, "preloadLynxViewReal") { it.skip() }
+        }
+    }
+
+    /**
      * 一站式短剧广告拦截与卡片过滤 (OneStopAd)
      */
     private fun installOneStopAndFeedAds() = plugin.safeRun("OneStopAndFeedAds") {
-        // A. 关键破局点：y() 方法必须返回 "短剧中插免广权益生效" 字符串！
+        // A. 核心破局点：y() 方法必须返回 "短剧中插免广权益生效" 字符串！
         val hostAdapters = listOf(
             "com.dragon.read.ad.onestop.munion.adapter.MUnionSeriesAdSdkHostAdapter",
             "com.dragon.read.ad.onestop.seriessdk.adapter.j",
@@ -240,6 +288,7 @@ class ByteDanceReadEngine(
         }
 
         val ecCfgCls = HookKit.loadClass(cl, "com.dragon.read.component.shortvideo.impl.sameproduct.config.IShoppingFeed\u0024\u0024Impl")
+            ?: HookKit.loadClass(cl, "com.dragon.read.component.shortvideo.impl.sameproduct.config.IShoppingFeed")
         if (ecCfgCls != null) {
             HookKit.hookAllAfterByName(ecCfgCls, "getConfig") { _, result, _ ->
                 if (result != null) {
@@ -261,38 +310,6 @@ class ByteDanceReadEngine(
         if (oldFeedCls != null) {
             HookKit.hookAllByName(oldFeedCls, "getAd") { it.setResult(null) }
         }
-    }
-
-    /**
-     * 试看标记字段清零 (TrialDataFlags)
-     */
-    private fun installTrialDataFlags() = plugin.safeRun("TrialDataFlags") {
-        val targets = listOf(
-            "com.dragon.read.rpc.model.EpisodeInfo",
-            "seriessdk.com.dragon.read.saas.rpc.model.EpisodeInfo",
-            "com.dragon.read.rpc.model.VideoData",
-            "readersaas.com.dragon.read.saas.rpc.model.VideoData",
-            "com.dragon.read.rpc.model.SaaSVideoModelData",
-            "seriessdk.com.dragon.read.saas.rpc.model.SaaSVideoModelData",
-            "com.dragon.read.rpc.model.VideoModelData",
-            "seriessdk.com.dragon.read.saas.rpc.model.VideoModelData",
-            "com.dragon.read.rpc.model.VideoPayInfo",
-            "com.dragon.read.component.shortvideo.data.saas.video.SaasVideoData",
-            "com.dragon.read.component.shortvideo.data.saas.rpcmodel.SaasVideoDirectoryItem"
-        )
-        for (name in targets) {
-            val cls = HookKit.loadClass(cl, name)
-            if (cls != null) {
-                HookKit.hookAllConstructors(cls) { obj, _ ->
-                    HookKit.zeroField(obj, "isPreviewMaterial")
-                    HookKit.zeroField(obj, "needUnlock")
-                    HookKit.zeroField(obj, "isTrialVideo")
-                    HookKit.zeroField(obj, "trialDuration")
-                    HookKit.setField(obj, "paid", true)
-                }
-            }
-        }
-        plugin.log("TrialDataFlags: Construct-time zero-field hooks installed")
     }
 
     /**

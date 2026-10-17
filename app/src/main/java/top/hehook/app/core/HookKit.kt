@@ -216,6 +216,59 @@ object HookKit {
         return count
     }
 
+    /**
+     * 拦截构造函数并在执行前修改入参 (纯零反射源头注入)
+     */
+    fun hookAllConstructorsBefore(
+        cls: Class<*>?,
+        callback: (Constructor<*>, Chain) -> Unit
+    ): Int {
+        if (cls == null || !isReady()) return 0
+        val mod = module ?: return 0
+        var count = 0
+        try {
+            for (c in cls.declaredConstructors) {
+                c.isAccessible = true
+                try {
+                    mod.hook(c).intercept { chain ->
+                        val ctx = ChainImpl(chain)
+                        try {
+                            callback(c, ctx)
+                        } catch (t: Throwable) {
+                            Log.w(TAG, "Exception in hookAllConstructorsBefore: ${t.message}")
+                        }
+                        val na = ctx.newArgs
+                        if (na != null) chain.proceed(na) else chain.proceed()
+                    }
+                    count++
+                } catch (_: Throwable) {}
+            }
+        } catch (_: Throwable) {}
+        return count
+    }
+
+    /**
+     * 条件匹配拦截类中的方法
+     */
+    fun hookAllMatchingMethods(
+        cls: Class<*>?,
+        matcher: (Method) -> Boolean,
+        callback: (Chain) -> Unit
+    ): Int {
+        if (cls == null || !isReady()) return 0
+        var count = 0
+        try {
+            for (m in cls.declaredMethods) {
+                if (matcher(m)) {
+                    if (hookBefore(m, callback)) {
+                        count++
+                    }
+                }
+            }
+        } catch (_: Throwable) {}
+        return count
+    }
+
     fun zeroField(obj: Any?, fieldName: String) {
         if (obj == null) return
         var curr: Class<*>? = obj.javaClass
