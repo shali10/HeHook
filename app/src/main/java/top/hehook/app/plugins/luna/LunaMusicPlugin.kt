@@ -1,8 +1,12 @@
 package top.hehook.app.plugins.luna
 
+import android.app.Activity
 import android.app.Application
 import android.os.Build
 import android.util.Log
+import android.view.View
+import android.view.ViewGroup
+import android.widget.TextView
 import top.hehook.app.core.BasePlugin
 import top.hehook.app.core.HookKit
 import java.lang.reflect.Method
@@ -12,15 +16,20 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /**
- * 汽水音乐 (com.luna.music) 商业化权益全解锁与全域去广告插件 v1.1.3
+ * 汽水音乐 (com.luna.music) 商业化权益全解锁与全域去广告插件 v1.1.4
  * 
  * 融合 MoonHook 核心架构精髓 + 纯本地零云控单机复刻：
  * 1. 严格主进程隔离 (Process Gate)：仅注入主进程 com.luna.music，坚决避开 :ad 与沙盒进程，彻底杜绝黑屏与状态错乱
- * 2. 商业化会员实体强锁 (CommerceInfoMemberShipEntity)：伪装 SVIP、isVip=true、阶段锁死 svip
- * 3. 商业化 JSON 权益直注 (CommerceInfoRepo)：地毯式斩断 needShowAd / inspireAdInfo(激励广告)
- * 4. 权益与下载配额全放行 (ConsumeBenefitResponse / DownloadItem / CheckDownloadResponse)：配额 999999，有效期至 2099 年
- * 5. 切歌音频插播广告与音频贴片彻底阻断 (AudioPatchAd)
- * 6. 穿山甲开屏广告根源跳过 (Pangle loadSplashAd) + 官方商店安装源伪装
+ * 2. 官方反篡改与“当前版本不安全”阻断粉碎 (PackageBlock Bypass)：
+ *    - PackageBlockInterceptor 放行网络链路
+ *    - PackageBlockDelegate 强锁 false / 屏蔽阻断跳转
+ *    - MainServiceImpl.getPackageBlockState 强锁 false
+ *    - UI 视图树层动态扫描：物理拔除全屏“当前版本不安全”警告遮罩
+ * 3. 商业化会员实体强锁 (CommerceInfoMemberShipEntity)：伪装 SVIP、isVip=true、阶段锁死 svip
+ * 4. 商业化 JSON 权益直注 (CommerceInfoRepo)：地毯式斩断 needShowAd / inspireAdInfo(激励广告)
+ * 5. 权益与下载配额全放行 (ConsumeBenefitResponse / DownloadItem / CheckDownloadResponse)：配额 999999，有效期至 2099 年
+ * 6. 切歌音频插播广告与音频贴片彻底阻断 (AudioPatchAd)
+ * 7. 穿山甲开屏广告根源跳过 (Pangle loadSplashAd) + 官方商店安装源伪装
  */
 class LunaMusicPlugin(
     packageName: String,
@@ -41,12 +50,15 @@ class LunaMusicPlugin(
             return
         }
 
-        log("Loading LunaMusicPlugin v1.1.3 (Commerce Entitlement Engine) for [$packageName]...")
+        log("Loading LunaMusicPlugin v1.1.4 (Full Anti-Tamper & Entitlement Engine) for [$packageName]...")
 
         // 1. 伪装正规应用市场安装渠道
         hookInstallerSource()
 
-        // 2. 商业化会员实体强锁 (CommerceInfoMemberShipEntity + 兼容老版 VipStatus)
+        // 2. 物理粉碎“当前版本不安全，请在正规应用市场下载”拦截门禁
+        hookPackageBlockAndAntiTamper()
+
+        // 3. 商业化会员实体强锁 (CommerceInfoMemberShipEntity + 兼容老版 VipStatus)
         if (isEnabled("unlock_vip", true)) {
             hookCommerceMemberShip()
             hookCommerceInfoRepo()
@@ -54,17 +66,17 @@ class LunaMusicPlugin(
             hookLegacyVipStatus()
         }
 
-        // 3. 拦截音频插播与切歌广告 (Audio Patch Ad)
+        // 4. 拦截音频插播与切歌广告 (Audio Patch Ad)
         if (isEnabled("remove_audio_ads", true)) {
             hookAudioPatchAds()
         }
 
-        // 4. 全域视觉广告与开屏广告阻断 (零黑屏、无损直通)
+        // 5. 全域视觉广告与开屏广告阻断 (零黑屏、无损直通)
         if (isEnabled("remove_visual_ads", true)) {
             hookAdGateAndSplash()
         }
 
-        // 5. 禁用字节 Reparo 在线热修复
+        // 6. 禁用字节 Reparo 在线热修复
         if (isEnabled("disable_hotfix", true)) {
             hookDisableReparo()
         }
@@ -107,6 +119,136 @@ class LunaMusicPlugin(
                 }
             }
         }
+    }
+
+    /**
+     * 核心粉碎：彻底绕过官方“当前版本不安全，请在正规应用市场下载”拦截机制
+     */
+    private fun hookPackageBlockAndAntiTamper() = safeRun("PackageBlockAndAntiTamper") {
+        // A. 拦截 PackageBlockInterceptor
+        val interceptorCls = HookKit.loadClass(
+            classLoader,
+            "com.luna.biz.main.init.blockpackage.PackageBlockInterceptor"
+        )
+        if (interceptorCls != null) {
+            for (m in interceptorCls.declaredMethods) {
+                if (m.name == "intercept" && m.parameterTypes.isNotEmpty()) {
+                    HookKit.hookBefore(m) { chain ->
+                        val chainObj = chain.args.firstOrNull() ?: return@hookBefore
+                        try {
+                            val requestMethod = chainObj.javaClass.getMethod("request")
+                            val requestObj = requestMethod.invoke(chainObj)
+                            val proceedMethod = chainObj.javaClass.getMethod("proceed", requestObj.javaClass)
+                            val resp = proceedMethod.invoke(chainObj, requestObj)
+                            chain.setResult(resp)
+                        } catch (_: Throwable) {
+                            try {
+                                val proceedMethod = chainObj.javaClass.methods.firstOrNull { it.name == "proceed" && it.parameterTypes.size == 1 }
+                                val requestMethod = chainObj.javaClass.methods.firstOrNull { it.name == "request" && it.parameterTypes.isEmpty() }
+                                if (proceedMethod != null && requestMethod != null) {
+                                    val req = requestMethod.invoke(chainObj)
+                                    val resp = proceedMethod.invoke(chainObj, req)
+                                    chain.setResult(resp)
+                                }
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                } else if (m.returnType == java.lang.Boolean.TYPE || m.returnType == java.lang.Boolean::class.java) {
+                    HookKit.hookBefore(m) { it.setResult(false) }
+                } else {
+                    HookKit.hookAfter(m) { _, result, _ ->
+                        if (result != null) {
+                            try {
+                                val postValMethod = result.javaClass.methods.firstOrNull { it.name == "postValue" || it.name == "setValue" }
+                                postValMethod?.invoke(result, false)
+                            } catch (_: Throwable) {}
+                        }
+                    }
+                }
+            }
+            log("PackageBlock: Hooked PackageBlockInterceptor")
+        }
+
+        // B. 拦截 PackageBlockDelegate
+        val delegateCls = HookKit.loadClass(
+            classLoader,
+            "com.luna.biz.main.init.blockpackage.PackageBlockDelegate"
+        )
+        if (delegateCls != null) {
+            for (m in delegateCls.declaredMethods) {
+                if (m.returnType == java.lang.Boolean.TYPE || m.returnType == java.lang.Boolean::class.java) {
+                    HookKit.hookBefore(m) { it.setResult(false) }
+                } else if (m.parameterTypes.any { it.name.contains("Activity") || it.name.contains("Context") }) {
+                    HookKit.hookBefore(m) { it.setResult(null) }
+                }
+            }
+            log("PackageBlock: Hooked PackageBlockDelegate")
+        }
+
+        // C. 拦截 MainServiceImpl.getPackageBlockState
+        val mainServiceCls = HookKit.loadClass(classLoader, "com.luna.biz.main.MainServiceImpl")
+        if (mainServiceCls != null) {
+            HookKit.hookAllByName(mainServiceCls, "getPackageBlockState") { it.setResult(false) }
+            HookKit.hookAllMatchingMethods(mainServiceCls, { it.name.contains("block", true) || it.name.contains("safe", true) }) {
+                if (it.method.returnType == java.lang.Boolean.TYPE || it.method.returnType == java.lang.Boolean::class.java) {
+                    it.setResult(false)
+                }
+            }
+            log("PackageBlock: Hooked MainServiceImpl")
+        }
+
+        // D. UI 视图树层动态扫描：物理拔除全屏“当前版本不安全”警告遮罩
+        hookActivityDecorViewForBlock()
+    }
+
+    private fun hookActivityDecorViewForBlock() {
+        val actCls = HookKit.loadClass(ClassLoader.getSystemClassLoader(), "android.app.Activity") ?: return
+        HookKit.hookAllByName(actCls, "onPostResume") { chain ->
+            val act = chain.thisObject as? Activity ?: return@hookAllByName
+            purgeUnsafeWarningView(act.window?.decorView)
+        }
+        HookKit.hookAllByName(actCls, "onWindowFocusChanged") { chain ->
+            val act = chain.thisObject as? Activity ?: return@hookAllByName
+            purgeUnsafeWarningView(act.window?.decorView)
+        }
+    }
+
+    private fun purgeUnsafeWarningView(view: View?) {
+        if (view == null) return
+        view.post {
+            try {
+                findAndRemoveBlockView(view)
+            } catch (_: Throwable) {}
+        }
+    }
+
+    private fun findAndRemoveBlockView(root: View): Boolean {
+        if (root is TextView) {
+            val text = root.text?.toString() ?: ""
+            if (text.contains("当前版本不安全") || text.contains("请在正规应用市场下载")) {
+                var parent: android.view.ViewParent? = root.parent
+                var blockContainer: View = root
+                while (parent is ViewGroup) {
+                    val pView = parent as View
+                    if (pView.id != android.R.id.content && pView.parent is ViewGroup) {
+                        blockContainer = pView
+                    } else {
+                        break
+                    }
+                    parent = pView.parent
+                }
+                blockContainer.visibility = View.GONE
+                (blockContainer.parent as? ViewGroup)?.removeView(blockContainer)
+                log("PackageBlock: Purged unsafe warning blocking view from UI tree")
+                return true
+            }
+        }
+        if (root is ViewGroup) {
+            for (i in 0 until root.childCount) {
+                if (findAndRemoveBlockView(root.getChildAt(i))) return true
+            }
+        }
+        return false
     }
 
     /**
@@ -172,7 +314,6 @@ class LunaMusicPlugin(
             injectSvipFields(root)
             root.toString()
         } catch (_: Throwable) {
-            // 正则兜底快速替换关键广告标记
             jsonStr
                 .replace("\"need_show_ad\":true", "\"need_show_ad\":false")
                 .replace("\"needShowAd\":true", "\"needShowAd\":false")
