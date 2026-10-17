@@ -114,7 +114,8 @@ object HookKit {
                 if (ctx.skipped) {
                     if (ctx.hasResult) ctx.result else defaultValue(method.returnType)
                 } else {
-                    if (ctx.newArgs != null) chain.proceed(ctx.newArgs) else chain.proceed()
+                    val na = ctx.newArgs
+                    if (na != null) chain.proceed(na) else chain.proceed()
                 }
             }
             true
