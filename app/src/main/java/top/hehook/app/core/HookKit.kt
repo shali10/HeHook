@@ -72,7 +72,7 @@ object HookKit {
         override val args: List<Any?> get() = raw.args ?: emptyList()
         var skipped: Boolean = false
         var hasResult: Boolean = false
-        var result: Any? = null
+        var customResult: Any? = null
         var newArgs: Array<Any?>? = null
 
         override fun skip() {
@@ -82,7 +82,7 @@ object HookKit {
         override fun setResult(result: Any?) {
             this.skipped = true
             this.hasResult = true
-            this.result = result
+            this.customResult = result
         }
 
         override fun setArg(index: Int, value: Any?) {
@@ -112,7 +112,7 @@ object HookKit {
                     Log.w(TAG, "Exception in hookBefore callback for ${method.name}: ${t.message}")
                 }
                 if (ctx.skipped) {
-                    if (ctx.hasResult) ctx.result else defaultValue(method.returnType)
+                    if (ctx.hasResult) ctx.customResult else defaultValue(method.returnType)
                 } else {
                     val na = ctx.newArgs
                     if (na != null) chain.proceed(na) else chain.proceed()
