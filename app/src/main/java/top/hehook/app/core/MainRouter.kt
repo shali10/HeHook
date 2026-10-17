@@ -7,6 +7,7 @@ import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
 import top.hehook.app.plugins.bilibili.BiliBiliPlugin
 import top.hehook.app.plugins.fanqie.FanQiePlugin
 import top.hehook.app.plugins.hongguo.HongGuoPlugin
+import top.hehook.app.plugins.luna.LunaMusicPlugin
 
 /**
  * 现代 LibXposed (API 101) 统一入口与运行时路由器
@@ -39,6 +40,7 @@ class MainRouter : XposedModule() {
             "com.phoenix.read" -> HongGuoPlugin(pkg, cl)
             "com.dragon.read" -> FanQiePlugin(pkg, cl)
             "tv.danmaku.bili" -> BiliBiliPlugin(pkg, cl)
+            "com.luna.music" -> LunaMusicPlugin(pkg, cl)
             else -> null
         }
 

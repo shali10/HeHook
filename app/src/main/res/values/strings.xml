@@ -7,14 +7,15 @@
         <item>com.phoenix.read</item>
         <item>com.dragon.read</item>
         <item>tv.danmaku.bili</item>
+        <item>com.luna.music</item>
     </string-array>
 
     <!-- Header Stats -->
     <string name="status_module_active">LSPosed 模块已就绪</string>
     <string name="status_module_spec">LibXposed API 101 标准规范</string>
-    <string name="stat_apps_count">3</string>
+    <string name="stat_apps_count">4</string>
     <string name="stat_apps_label">托管应用</string>
-    <string name="stat_rules_count">11</string>
+    <string name="stat_rules_count">15</string>
     <string name="stat_rules_label">增强策略</string>
     <string name="stat_engine_name">DexKit</string>
     <string name="stat_engine_label">C++ 匹配内核</string>
@@ -61,4 +62,16 @@
     <string name="bili_feed_desc">精准剔除带有广告/推广标识的信息流推荐卡</string>
     <string name="bili_bg_play_title">解锁后台音频播放</string>
     <string name="bili_bg_play_desc">锁屏或切后台时保持音频持续播放不中断</string>
+
+    <!-- Luna Music (汽水音乐) -->
+    <string name="luna_title">汽水音乐</string>
+    <string name="luna_pkg">com.luna.music</string>
+    <string name="luna_vip_title">免看广告畅听 VIP 歌曲</string>
+    <string name="luna_vip_desc">强锁 VipStatus 永久会员状态，无需看激励视频无限听歌</string>
+    <string name="luna_audio_ad_title">拦截音频插播与切歌广告</string>
+    <string name="luna_audio_ad_desc">阻断 Audio Patch Ad 语音贴片与流媒体插播广告</string>
+    <string name="luna_visual_ad_title">全域开屏与视觉推广净化</string>
+    <string name="luna_visual_ad_desc">开屏闪屏秒进主界面，屏蔽发现流直播间引流卡片</string>
+    <string name="luna_hotfix_title">屏蔽官方热更新对抗</string>
+    <string name="luna_hotfix_desc">阻止字节 Reparo 热补丁下发对抗与规则覆盖</string>
 </resources>

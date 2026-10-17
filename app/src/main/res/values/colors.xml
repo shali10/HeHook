@@ -46,6 +46,11 @@
     <color name="brand_bili_container">#FCE7F3</color>
     <color name="brand_bili_on_container">#9D174D</color>
 
+    <!-- 汽水音乐 (Luna Electric Green) -->
+    <color name="brand_luna">#10B981</color>
+    <color name="brand_luna_container">#E6FBF2</color>
+    <color name="brand_luna_on_container">#065F46</color>
+
     <!-- Dark Accents for Hero Header -->
     <color name="hero_bg_start">#1E1B4B</color>
     <color name="hero_bg_end">#312E81</color>

@@ -19,6 +19,7 @@ class MainActivity : AppCompatActivity() {
         const val PKG_HONGGUO = "com.phoenix.read"
         const val PKG_FANQIE = "com.dragon.read"
         const val PKG_BILI = "tv.danmaku.bili"
+        const val PKG_LUNA = "com.luna.music"
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -30,6 +31,7 @@ class MainActivity : AppCompatActivity() {
         initHongGuoSettings()
         initFanQieSettings()
         initBiliSettings()
+        initLunaSettings()
         updateInstalledStatus()
     }
 
@@ -80,6 +82,17 @@ class MainActivity : AppCompatActivity() {
         } else {
             binding.tvBiliStatus.setBackgroundColor(getColor(R.color.surface_variant))
             binding.tvBiliStatus.setTextColor(getColor(R.color.text_tertiary))
+        }
+
+        // 汽水音乐状态
+        val luna = checkAppInstalled(PKG_LUNA)
+        binding.tvLunaStatus.text = luna.second
+        if (luna.first) {
+            binding.tvLunaStatus.setBackgroundResource(R.drawable.bg_chip_status)
+            binding.tvLunaStatus.setTextColor(getColor(R.color.status_active))
+        } else {
+            binding.tvLunaStatus.setBackgroundColor(getColor(R.color.surface_variant))
+            binding.tvLunaStatus.setTextColor(getColor(R.color.text_tertiary))
         }
     }
 
@@ -173,6 +186,34 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun initLunaSettings() {
+        with(binding) {
+            switchLunaVip.isChecked = ConfigManager.getBoolean(PKG_LUNA, "unlock_vip", true)
+            switchLunaVip.setOnCheckedChangeListener { _, isChecked ->
+                ConfigManager.setBoolean(PKG_LUNA, "unlock_vip", isChecked)
+            }
+
+            switchLunaAudioAd.isChecked = ConfigManager.getBoolean(PKG_LUNA, "remove_audio_ads", true)
+            switchLunaAudioAd.setOnCheckedChangeListener { _, isChecked ->
+                ConfigManager.setBoolean(PKG_LUNA, "remove_audio_ads", isChecked)
+            }
+
+            switchLunaVisualAd.isChecked = ConfigManager.getBoolean(PKG_LUNA, "remove_visual_ads", true)
+            switchLunaVisualAd.setOnCheckedChangeListener { _, isChecked ->
+                ConfigManager.setBoolean(PKG_LUNA, "remove_visual_ads", isChecked)
+            }
+
+            switchLunaHotfix.isChecked = ConfigManager.getBoolean(PKG_LUNA, "disable_hotfix", true)
+            switchLunaHotfix.setOnCheckedChangeListener { _, isChecked ->
+                ConfigManager.setBoolean(PKG_LUNA, "disable_hotfix", isChecked)
+            }
+
+            btnRestartLuna.setOnClickListener {
+                restartPackage(PKG_LUNA, "汽水音乐")
+            }
+        }
+    }
+
     private fun restartPackage(packageName: String, appName: String) {
         val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         am.killBackgroundProcesses(packageName)
@@ -184,7 +225,8 @@ class MainActivity : AppCompatActivity() {
         am.killBackgroundProcesses(PKG_HONGGUO)
         am.killBackgroundProcesses(PKG_FANQIE)
         am.killBackgroundProcesses(PKG_BILI)
-        Snackbar.make(binding.root, "已一键重启全部受控应用（红果/番茄/B站）", Snackbar.LENGTH_SHORT).show()
+        am.killBackgroundProcesses(PKG_LUNA)
+        Snackbar.make(binding.root, "已一键重启全部受控应用（红果/番茄/B站/汽水）", Snackbar.LENGTH_SHORT).show()
     }
 
     private fun showAboutDialog() {
@@ -192,11 +234,12 @@ class MainActivity : AppCompatActivity() {
             .setTitle("关于 HeHook 聚合助手")
             .setMessage(
                 """
-                【版本】v1.1.1 (Build 111)
+                【版本】v1.1.2 (Build 112)
                 【标准】Modern LibXposed API 101
                 【架构】零 SO 依赖 / 纯 Java 虚拟调用 / 极致轻量秒级启动
 
-                【更新亮点 v1.1.1】
+                【更新亮点 v1.1.2】
+                - 🎵 汽水音乐：实装 VipStatus 核心实体门禁与永久会员伪装，免看激励视频畅听 VIP 曲库，拦截切歌音频贴片与语音插播广告，开屏秒进，阻断 Reparo 热更新。
                 - 🎬 红果短剧：源头 VipInfoModel 构造劫持，彻底清除 11 类反射开销，告别掉帧卡顿，流畅如丝；保留 1080P 超清锁与短剧中插免广。
                 - 📖 番茄小说：吸纳 HookVip 极简精髓，阅读免广与 AI 听书高品质多音色全解锁。
                 - 📺 哔哩哔哩：实装 VipUserInfo/VipExtraUserInfo 大会员与画质特权，现代 gRPC 开屏回包斩首秒过，首页推荐流卡片净化。
