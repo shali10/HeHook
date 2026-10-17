@@ -234,12 +234,12 @@ class MainActivity : AppCompatActivity() {
             .setTitle("关于 HeHook 聚合助手")
             .setMessage(
                 """
-                【版本】v1.1.4 (Build 114)
+                【版本】v1.1.5 (Build 115)
                 【标准】Modern LibXposed API 101
                 【架构】零 SO 依赖 / 纯 Java 虚拟调用 / 极致轻量秒级启动
 
-                【更新亮点 v1.1.4】
-                - 🎵 汽水音乐：彻底粉碎“当前版本不安全，请在正规应用市场下载”拦截门禁，穿透 PackageBlock 阻断链路并物理清除遮罩层；实装 Entitlement Commerce SVIP 强锁与激励广告清零。
+                【更新亮点 v1.1.5】
+                - 🎵 汽水音乐：实装动态 ClassLoader 热补丁引擎，攻克开屏 CommonSplashAdConfig 与 SplashCompositeView 零秒跳过，激励视频广告直通放行，会员商业化权益全量实装。
                 - 🎬 红果短剧：源头 VipInfoModel 构造劫持，彻底清除 11 类反射开销，告别掉帧卡顿，流畅如丝；保留 1080P 超清锁与短剧中插免广。
                 - 📖 番茄小说：吸纳 HookVip 极简精髓，阅读免广与 AI 听书高品质多音色全解锁。
                 - 📺 哔哩哔哩：实装 VipUserInfo/VipExtraUserInfo 大会员与画质特权，现代 gRPC 开屏回包斩首秒过，首页推荐流卡片净化。
