@@ -156,13 +156,15 @@ class LunaMusicPlugin(
                 } else if (m.returnType == java.lang.Boolean.TYPE || m.returnType == java.lang.Boolean::class.java) {
                     HookKit.hookBefore(m) { it.setResult(false) }
                 } else {
-                    HookKit.hookAfter(m) { _, result, _ ->
+                    hookMethod(m) { chain ->
+                        val result = chain.proceed()
                         if (result != null) {
                             try {
                                 val postValMethod = result.javaClass.methods.firstOrNull { it.name == "postValue" || it.name == "setValue" }
                                 postValMethod?.invoke(result, false)
                             } catch (_: Throwable) {}
                         }
+                        result
                     }
                 }
             }
@@ -189,10 +191,14 @@ class LunaMusicPlugin(
         val mainServiceCls = HookKit.loadClass(classLoader, "com.luna.biz.main.MainServiceImpl")
         if (mainServiceCls != null) {
             HookKit.hookAllByName(mainServiceCls, "getPackageBlockState") { it.setResult(false) }
-            HookKit.hookAllMatchingMethods(mainServiceCls, { it.name.contains("block", true) || it.name.contains("safe", true) }) {
-                if (it.method.returnType == java.lang.Boolean.TYPE || it.method.returnType == java.lang.Boolean::class.java) {
-                    it.setResult(false)
+            HookKit.hookAllMatchingMethods(
+                mainServiceCls,
+                { m ->
+                    (m.name.contains("block", true) || m.name.contains("safe", true)) &&
+                    (m.returnType == java.lang.Boolean.TYPE || m.returnType == java.lang.Boolean::class.java)
                 }
+            ) { chain ->
+                chain.setResult(false)
             }
             log("PackageBlock: Hooked MainServiceImpl")
         }
