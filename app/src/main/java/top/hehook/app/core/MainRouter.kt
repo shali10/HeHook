@@ -22,6 +22,7 @@ class MainRouter : XposedModule() {
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         super.onModuleLoaded(param)
         instance = this
+        HookKit.init(this)
         Log.i(TAG, "HeHook Module Loaded into process.")
     }
 

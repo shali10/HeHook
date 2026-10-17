@@ -19,15 +19,19 @@ abstract class BasePlugin(
     val tag: String = "HeHook_${javaClass.simpleName}"
     var appContext: Context? = null
 
-    // 延迟初始化 DexKit C++ 模式匹配桥接器
+    // 延迟初始化 DexKit C++ 模式匹配桥接器（安全加载）
     private var _dexKit: DexKitBridge? = null
-    val dexKit: DexKitBridge
+    val dexKit: DexKitBridge?
         get() {
             if (_dexKit == null) {
-                System.loadLibrary("dexkit")
-                _dexKit = DexKitBridge.create(classLoader, false)
+                try {
+                    System.loadLibrary("dexkit")
+                    _dexKit = DexKitBridge.create(classLoader, false)
+                } catch (t: Throwable) {
+                    Log.w(tag, "DexKit native bridge not available: ${t.message}")
+                }
             }
-            return _dexKit!!
+            return _dexKit
         }
 
     /**

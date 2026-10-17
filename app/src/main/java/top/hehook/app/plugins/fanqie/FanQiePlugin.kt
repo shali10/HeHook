@@ -1,11 +1,13 @@
 package top.hehook.app.plugins.fanqie
 
 import top.hehook.app.core.BasePlugin
-import java.lang.reflect.Method
+import top.hehook.app.core.ByteDanceReadEngine
+import top.hehook.app.core.HookKit
 
 /**
  * 番茄免费小说 (com.dragon.read) 增强插件
- * 支持：免广沉浸阅读、去章节末尾广告、解锁高品质听书音色、屏蔽金币悬浮挂件
+ * 接入 ByteDanceReadEngine 全套核心：AdGate 总闸、PrivilegeManager VIP 全穿透、沉浸阅读免广、横幅拦截与开屏秒进
+ * 独家追加：高品质 AI 听书音色全解锁、金币悬浮挂件与福利红点净化
  */
 class FanQiePlugin(
     packageName: String,
@@ -13,97 +15,66 @@ class FanQiePlugin(
 ) : BasePlugin(packageName, classLoader) {
 
     override fun handleHook() {
-        log("Loading FanQiePlugin features...")
+        log("Loading FanQiePlugin v1.1.0...")
 
-        // 1. 全局免广与 VIP 权限注入
-        if (isEnabled("unlock_reader_vip", true)) {
-            hookReaderVip()
-        }
+        // 1. 挂载字节阅读平台通用引擎 (AdGate 广告总闸 + PrivilegeManager VIP + 沉浸免广 + 横幅清屏)
+        ByteDanceReadEngine(this, isHongGuo = false).installAll()
 
-        // 2. 拦截章节末尾广告与开屏广告
-        if (isEnabled("remove_reader_ads", true)) {
-            hookReaderAdBlock()
-        }
-
-        // 3. 解锁高品质 AI 朗读音色
+        // 2. 解锁高品质 AI 朗读听书音色
         if (isEnabled("unlock_tts_timbre", true)) {
             hookTtsTimbre()
         }
 
-        // 4. 隐藏金币红包悬浮挂件
+        // 3. 隐藏金币红包悬浮挂件与活动弹窗
         if (isEnabled("hide_floating_pendant", true)) {
             hookHidePendant()
         }
     }
 
     /**
-     * VIP 身份与免广阅读权限
-     */
-    private fun hookReaderVip() = safeRun("ReaderVip") {
-        try {
-            val nsVipCls = classLoader.loadClass("com.dragon.read.component.biz.impl.NsVipImpl")
-            for (m in nsVipCls.declaredMethods) {
-                when (m.name) {
-                    "isVip", "isAnyVip", "canReadPaidBook", "isVipEnable", "canReadPaidBookEnhance" -> {
-                        replaceMethod(m, true)
-                        log("Replaced FanQie NsVipImpl.${m.name} -> true")
-                    }
-                    "isNormalUser", "audioIsPubPay" -> {
-                        replaceMethod(m, false)
-                        log("Replaced FanQie NsVipImpl.${m.name} -> false")
-                    }
-                }
-            }
-        } catch (_: Throwable) {
-            log("NsVipImpl not found, trying fallback")
-        }
-    }
-
-    /**
-     * 章节末尾插页广告与信息流拦截
-     */
-    private fun hookReaderAdBlock() = safeRun("ReaderAdBlock") {
-        try {
-            val feedDrawCls = classLoader.loadClass("com.dragon.read.ad.feeddraw.FeedDrawAdManager")
-            for (m in feedDrawCls.declaredMethods) {
-                if (m.name == "getAd") {
-                    replaceMethod(m, null)
-                    log("Blocked FanQie FeedDrawAdManager.getAd -> null")
-                }
-            }
-        } catch (_: Throwable) {}
-    }
-
-    /**
-     * 解锁听书优质音色限制
+     * 解锁听书高品质 AI 朗读音色限制 (纯反射零 SO 依赖)
      */
     private fun hookTtsTimbre() = safeRun("TtsTimbre") {
-        try {
-            val timbreMethods = dexKit.findMethod {
-                matcher {
-                    name = "isVipTimbre"
-                }
+        val ttsClasses = listOf(
+            "com.dragon.read.reader.tts.model.TTSVoice",
+            "com.dragon.read.reader.tts.model.TtsToneModel",
+            "com.dragon.read.reader.tts.manager.TTSVoiceManager",
+            "com.dragon.read.component.biz.impl.NsVipImpl"
+        )
+        for (name in ttsClasses) {
+            val cls = HookKit.loadClass(classLoader, name)
+            if (cls != null) {
+                HookKit.hookAllByName(cls, "isVipTimbre") { it.setResult(false) }
+                HookKit.hookAllByName(cls, "isPayVoice") { it.setResult(false) }
+                HookKit.hookAllByName(cls, "needUnlock") { it.setResult(false) }
+                HookKit.hookAllByName(cls, "isToneVip") { it.setResult(false) }
             }
-            for (m in timbreMethods) {
-                val methodInstance = m.getMethodInstance(classLoader)
-                replaceMethod(methodInstance, false)
-                log("Replaced isVipTimbre -> false for ${m.className}")
-            }
-        } catch (_: Throwable) {}
+        }
+        log("TtsTimbre: VIP timbre unlocks hooked")
     }
 
     /**
-     * 隐藏悬浮金币挂件与活动弹窗
+     * 隐藏悬浮金币挂件、活动福袋与主界面赚钱Tab
      */
     private fun hookHidePendant() = safeRun("HidePendant") {
-        try {
-            val pendantCls = classLoader.loadClass("com.bytedance.ug.sdk.novel.pendant.PlanPendantServiceImpl")
-            for (m in pendantCls.declaredMethods) {
-                if (m.name == "triggerEvent") {
-                    blockMethod(m)
-                    log("Blocked FanQie Pendant triggerEvent")
-                }
-            }
-        } catch (_: Throwable) {}
+        // A. 悬浮挂件分发服务
+        val pendantCls = HookKit.loadClass(classLoader, "com.bytedance.ug.sdk.novel.pendant.PlanPendantServiceImpl")
+        if (pendantCls != null) {
+            HookKit.hookAllByName(pendantCls, "triggerEvent") { it.skip() }
+            HookKit.hookAllByName(pendantCls, "showPendant") { it.skip() }
+        }
+
+        // B. 金币挂件展示入口
+        val f1Cls = HookKit.loadClass(classLoader, "com.dragon.read.goldcoinbox.pendant.video.f1")
+        if (f1Cls != null) {
+            HookKit.hookAllByName(f1Cls, "show") { it.skip() }
+        }
+
+        // C. 主页底部赚钱/福利 Tab 隐藏
+        val mainTabCls = HookKit.loadClass(classLoader, "com.dragon.read.pages.main.m")
+        if (mainTabCls != null) {
+            HookKit.hookAllByName(mainTabCls, "b") { it.skip() }
+        }
+        log("HidePendant: Floating pendant and reward tabs suppressed")
     }
 }
