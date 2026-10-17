@@ -82,14 +82,15 @@ class LunaMusicPlugin(
         val vipStatusCls = HookKit.loadClass(classLoader, "com.luna.common.arch.db.entity.VipStatus")
         if (vipStatusCls != null) {
             // A. 构造器劫持：一旦实例化直接修改其私有/公有字段
-            HookKit.hookAllConstructors(vipStatusCls) { chain ->
-                val obj = chain.thisObject ?: return@hookAllConstructors
-                HookKit.setField(obj, "isVip", true)
-                HookKit.setField(obj, "isSVip", true)
-                HookKit.setField(obj, "isSuperVip", true)
-                HookKit.setField(obj, "vipType", 2) // 2: SVIP
-                HookKit.setField(obj, "expireTime", FAR_FUTURE_MS)
-                HookKit.setField(obj, "leftTime", FAR_FUTURE_SEC)
+            HookKit.hookAllConstructors(vipStatusCls) { obj, _ ->
+                if (obj != null) {
+                    HookKit.setField(obj, "isVip", true)
+                    HookKit.setField(obj, "isSVip", true)
+                    HookKit.setField(obj, "isSuperVip", true)
+                    HookKit.setField(obj, "vipType", 2) // 2: SVIP
+                    HookKit.setField(obj, "expireTime", FAR_FUTURE_MS)
+                    HookKit.setField(obj, "leftTime", FAR_FUTURE_SEC)
+                }
             }
 
             // B. Getter 方法拦截
@@ -130,11 +131,12 @@ class LunaMusicPlugin(
             "com.luna.biz.entitlement.core.commerceinfo.entity.CommerceInfoMemberShipEntity"
         )
         if (entityCls != null) {
-            HookKit.hookAllConstructors(entityCls) { chain ->
-                val obj = chain.thisObject ?: return@hookAllConstructors
-                HookKit.setField(obj, "isVip", true)
-                HookKit.setField(obj, "vipStage", "svip")
-                HookKit.setField(obj, "lastMemberShipType", "svip")
+            HookKit.hookAllConstructors(entityCls) { obj, _ ->
+                if (obj != null) {
+                    HookKit.setField(obj, "isVip", true)
+                    HookKit.setField(obj, "vipStage", "svip")
+                    HookKit.setField(obj, "lastMemberShipType", "svip")
+                }
             }
             HookKit.hookAllByName(entityCls, "isVip") { it.setResult(true) }
             HookKit.hookAllByName(entityCls, "getVipStage") { it.setResult("svip") }
