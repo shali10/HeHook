@@ -1,26 +1,17 @@
 package top.hehook.app.plugins.luna
 
-import android.app.Activity
-import android.app.Dialog
-import android.content.Context
-import android.content.Intent
-import android.util.Log
-import android.view.View
-import android.view.ViewGroup
-import android.widget.TextView
 import top.hehook.app.core.BasePlugin
 import top.hehook.app.core.HookKit
 
 /**
- * 汽水音乐 (com.luna.music) 增强插件 v1.1.2 增强防线版
+ * 汽水音乐 (com.luna.music) 增强插件 v1.1.2 稳定丝滑版
  * 
- * 核心痛点与攻坚特性：
- * 1. 免看广告获取听歌时间：强锁 VipStatus 实体（isVip/isSVip 恒为 true），有效期锁死至公元 5555 年，无视 30 分钟广告门禁
- * 2. 伪装正规应用商店安装源：拦截 getInstallerPackageName 伪装为应用宝，绕过“当前版本不安全”来源自检
- * 3. 物理剿灭“版本不安全”拦截界面：拦截安全警告页面与风控弹窗（Dialog/TextView 全局感知斩首）
- * 4. 穿山甲 SDK (Pangle) 开屏斩首：阻断 loadSplashAd 请求，SplashActivity 极速直通
- * 5. 切歌与播歌音频插播广告拦截：彻底干掉 AudioPatchAd
- * 6. 禁用字节在线热修复 Reparo：防止官方补丁下发对抗
+ * 核心原则：零黑屏风险、不碰基础 UI 组件、精准语义总闸
+ * 1. 免看广告畅听 VIP 歌曲：强锁 VipStatus 实体（isVip/isSVip 恒为 true），有效期锁死至公元 5555 年，无视 30 分钟激励视频门禁
+ * 2. 绕过安装来源自检：拦截 ApplicationPackageManager.getInstallerPackageName 伪装为应用宝，消除第三方提示
+ * 3. 拦截音频插播与切歌广告：屏蔽 AudioPatchAd
+ * 4. 纯净开屏秒入：只阻断广告加载与展示方法，不暴力 finish Activity，杜绝黑屏死循环
+ * 5. 禁用字节在线热修复 Reparo：防止官方下发补丁对抗
  */
 class LunaMusicPlugin(
     packageName: String,
@@ -33,10 +24,10 @@ class LunaMusicPlugin(
     }
 
     override fun handleHook() {
-        log("Loading hardened LunaMusicPlugin for [$packageName]...")
+        log("Loading LunaMusicPlugin stable edition for [$packageName]...")
 
-        // 1. 伪装正规应用市场安装源 + 剿灭“当前版本不安全”自检阻断
-        hookInstallerSourceAndSecurityBypass()
+        // 1. 伪装正规应用市场安装渠道 (绕过安装来源自检)
+        hookInstallerSource()
 
         // 2. 解锁免看广告获取听歌时间 (VIP 歌曲畅听 + 消除时长限制门禁)
         if (isEnabled("unlock_vip", true)) {
@@ -49,7 +40,7 @@ class LunaMusicPlugin(
             hookAudioPatchAds()
         }
 
-        // 4. 全域视觉广告与穿山甲开屏秒过
+        // 4. 全域视觉广告与开屏广告阻断 (零黑屏、无损直通)
         if (isEnabled("remove_visual_ads", true)) {
             hookAdGateAndSplash()
         }
@@ -61,10 +52,9 @@ class LunaMusicPlugin(
     }
 
     /**
-     * 伪装正规应用市场安装渠道 + 斩断“当前版本不安全”拦截
+     * 伪装正规应用市场安装渠道
      */
-    private fun hookInstallerSourceAndSecurityBypass() = safeRun("SecurityBypass") {
-        // A. 拦截 PackageManager.getInstallerPackageName 伪装成腾讯应用宝渠道
+    private fun hookInstallerSource() = safeRun("InstallerSource") {
         val pmClasses = listOf(
             "android.app.ApplicationPackageManager",
             "android.content.pm.PackageManager"
@@ -80,57 +70,7 @@ class LunaMusicPlugin(
                 }
             }
         }
-        log("SecurityBypass: getInstallerPackageName spoofed to qqdownloader")
-
-        // B. 全局感知并干掉带有“当前版本不安全”警告的 Dialog 弹窗
-        try {
-            val dialogCls = Dialog::class.java
-            HookKit.hookAllByName(dialogCls, "show") { chain ->
-                val dialog = chain.thisObject as? Dialog ?: return@hookAllByName
-                try {
-                    val decor = dialog.window?.decorView
-                    if (decor != null && hasSecurityWarningText(decor)) {
-                        chain.skip()
-                        dialog.dismiss()
-                        log("SecurityBypass: Blocked security warning Dialog popup")
-                    }
-                } catch (_: Throwable) {}
-            }
-        } catch (_: Throwable) {}
-
-        // C. 拦截带有“当前版本不安全”的 TextView 渲染并清空隐藏
-        try {
-            val tvCls = TextView::class.java
-            HookKit.hookAllByName(tvCls, "setText") { chain ->
-                val text = chain.args.firstOrNull()?.toString() ?: ""
-                if (text.contains("当前版本不安全") || text.contains("正规应用市场")) {
-                    val tv = chain.thisObject as? TextView
-                    tv?.post {
-                        try {
-                            tv.visibility = View.GONE
-                            (tv.parent as? ViewGroup)?.visibility = View.GONE
-                        } catch (_: Throwable) {}
-                    }
-                    chain.setArg(0, "")
-                    log("SecurityBypass: Neutralized security warning text: $text")
-                }
-            }
-        } catch (_: Throwable) {}
-    }
-
-    private fun hasSecurityWarningText(view: View): Boolean {
-        if (view is TextView) {
-            val text = view.text?.toString() ?: ""
-            if (text.contains("当前版本不安全") || text.contains("正规应用市场")) {
-                return true
-            }
-        }
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                if (hasSecurityWarningText(view.getChildAt(i))) return true
-            }
-        }
-        return false
+        log("InstallerSource: getInstallerPackageName spoofed to qqdownloader")
     }
 
     /**
@@ -221,7 +161,7 @@ class LunaMusicPlugin(
     }
 
     /**
-     * 广告位置总闸 (AdGate) 与开屏极速直通
+     * 广告位置总闸 (AdGate) 与开屏广告阻断 (杜绝黑屏)
      */
     private fun hookAdGateAndSplash() = safeRun("AdGateAndSplash") {
         // A. 穿山甲 SDK (Pangle) 开屏广告全量拦截
@@ -251,7 +191,7 @@ class LunaMusicPlugin(
             HookKit.hookAllMatchingMethods(cls, { it.name == "canRetain" }) { it.setResult(false) }
         }
 
-        // C. 开屏展示层直通 (秒入主界面)
+        // C. 开屏展示层仅跳过广告视图绘制，绝不暴力 finish Activity（避免黑屏）
         val splashClasses = listOf(
             "com.luna.biz.splash.SplashActivity",
             "com.luna.music.splash.SplashActivity",
@@ -264,23 +204,8 @@ class LunaMusicPlugin(
             HookKit.hookAllByName(cls, "showNaturalAdView") { it.skip() }
             HookKit.hookAllByName(cls, "showBrandAdView") { it.skip() }
             HookKit.hookAllByName(cls, "showImcSplashView") { it.skip() }
-            
-            // 开屏 Activity 启动后立即 finish 直通主页
-            HookKit.hookAllByName(cls, "onResume") { chain ->
-                val act = chain.thisObject as? Activity
-                if (act != null && !act.isFinishing) {
-                    try {
-                        val mainIntent = act.packageManager.getLaunchIntentForPackage(packageName)
-                        if (mainIntent != null) {
-                            mainIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                            act.startActivity(mainIntent)
-                        }
-                    } catch (_: Throwable) {}
-                    act.finish()
-                    log("AdGateAndSplash: Fast-forwarded $cname to main activity")
-                }
-            }
-            log("AdGateAndSplash: Splash display in $cname skipped")
+            HookKit.hookAllByName(cls, "checkAd") { it.skip() }
+            log("AdGateAndSplash: Splash display in $cname skipped safely")
         }
     }
 
@@ -307,7 +232,6 @@ class LunaMusicPlugin(
     private fun hookViaDexKitPattern() {
         try {
             val bridge = dexKit ?: return
-            log("DexKit pattern matcher scanning for vip_user / svip_user...")
             val findMethodFunc = bridge.javaClass.methods.firstOrNull { it.name == "findMethod" }
             if (findMethodFunc != null) {
                 log("DexKit: native bridge active and ready")
