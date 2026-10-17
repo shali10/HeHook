@@ -139,16 +139,18 @@ class LunaMusicPlugin(
         )
         if (repoCls != null) {
             for (m in repoCls.declaredMethods) {
-                // 拦截入参带 String 的解析方法
                 val hasStringParam = m.parameterTypes.any { it == String::class.java }
                 if (hasStringParam) {
-                    HookKit.hookAfter(m) { _, result, chain ->
+                    hookMethod(m) { chain ->
+                        val result = chain.proceed()
                         if (result is String) {
-                            chain.setResult(sanitizeAndInjectCommerceJson(result))
+                            sanitizeAndInjectCommerceJson(result)
                         } else if (result is ByteArray) {
                             val originalStr = String(result, StandardCharsets.UTF_8)
                             val modifiedStr = sanitizeAndInjectCommerceJson(originalStr)
-                            chain.setResult(modifiedStr.toByteArray(StandardCharsets.UTF_8))
+                            modifiedStr.toByteArray(StandardCharsets.UTF_8)
+                        } else {
+                            result
                         }
                     }
                 }
