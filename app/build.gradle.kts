@@ -19,10 +19,22 @@ android {
         }
     }
 
+    signingConfigs {
+        create("release") {
+            storeFile = file("hehook.jks")
+            storePassword = "hehook123456"
+            keyAlias = "hehook"
+            keyPassword = "hehook123456"
+            enableV1Signing = true
+            enableV2Signing = true
+            enableV3Signing = true
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
