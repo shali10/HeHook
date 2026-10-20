@@ -16,6 +16,11 @@ class MainRouter : XposedModule() {
 
     companion object {
         private const val TAG = "HeHook_Router"
+
+        init {
+            // 类静态初始化即打点：比任何回调都早，用于区分「类没加载」与「回调没触发」
+            Trace.log(TAG, "== MainRouter CLASS LOADED ==")
+        }
         lateinit var instance: MainRouter
             private set
     }
@@ -33,7 +38,7 @@ class MainRouter : XposedModule() {
         val pkg = param.packageName
         val cl = param.classLoader
 
-        Trace.log(TAG, "== onPackageReady == pkg=$pkg first=${param.isFirstPackage} cl=${cl.javaClass.name}")
+        Trace.log(TAG, "== onPackageReady == pkg=$pkg cl=${cl.javaClass.name}")
 
         // 核心分发路由：根据宿主包名，精确分发给各自独立的子模块
         val plugin: BasePlugin? = when (pkg) {
