@@ -50,7 +50,10 @@ class LunaMusicPlugin(
             return
         }
 
-        log("Loading LunaMusicPlugin v1.1.8 (Type-Guard Edition) for [$packageName]...")
+        log("Loading LunaMusicPlugin v1.1.9 (Type-Guard + Channel Spoof) for [$packageName]...")
+
+        // 0. 安装来源伪装 —— 必须最先执行，晚于客户端自检就会弹「当前版本不安全」
+        hookInstallerSource()
 
         if (isEnabled("unlock_vip", true)) {
             hookRewardTaskInfo()
@@ -234,6 +237,37 @@ class LunaMusicPlugin(
         }
 
         log("SplashAd: $n hooked")
+    }
+
+    // ── 0. 安装来源伪装（19.1.0 只查 getInstallerPackageName，无 getInstallSourceInfo）──
+    private fun hookInstallerSource() = safeRun("InstallerSource") {
+        var n = 0
+        val candidates = listOf(
+            "android.app.ApplicationPackageManager",
+            "android.content.pm.PackageManager"
+        )
+        for (cname in candidates) {
+            val cls = try {
+                Class.forName(cname)
+            } catch (_: Throwable) {
+                continue
+            }
+            for (m in cls.declaredMethods) {
+                if (m.name != "getInstallerPackageName") continue
+                if (m.parameterTypes.size != 1) continue
+                if (m.parameterTypes[0] != String::class.java) continue
+                try {
+                    m.isAccessible = true
+                    if (HookKit.hookBefore(m) { chain ->
+                            val pkg = chain.args.firstOrNull() as? String
+                            if (pkg == null || pkg == packageName) {
+                                chain.setResult("com.tencent.android.qqdownloader")
+                            }
+                        }) n++
+                } catch (_: Throwable) {}
+            }
+        }
+        log("InstallerSource: $n hooked (spoof=qqdownloader)")
     }
 
     // ── 8. PackageBlock 状态放行 ────────────────────────────────────
