@@ -11,8 +11,8 @@ android {
         applicationId = "top.hehook.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 122
-        versionName = "1.2.2"
+        versionCode = 123
+        versionName = "1.2.3"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
@@ -60,7 +60,7 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
 
     // Modern LibXposed API (API 101) - 仅编译期引入，运行时由 LSPosed 提供
-    compileOnly("io.github.libxposed:api:100.0.0")
+    compileOnly("io.github.libxposed:api:102.0.0")
 
     // DexKit C++ 模式匹配引擎 (全版本通杀核心)
     implementation("org.luckypray:dexkit:2.0.2")
