@@ -65,6 +65,7 @@ class LunaMusicPlugin(
             hookRewardTaskInfo()
             hookPlayEntitlementEntity()
             hookPlayEntitlementImpl()
+            hookRewardStage()
             hookVipStatusEnum()
             hookMemberShipVip()
             hookCommerceMemberShip()
@@ -153,8 +154,47 @@ class LunaMusicPlugin(
         var n = 0
         n += hookExact(cls, "b", "java.lang.Boolean", true)
         n += hookExact(cls, "f", "java.lang.Long", FAR_FUTURE_MS)
+        // e() 是 AdRewardController.G() 判定阶段的数据源，拉满即视为「今日奖励已满」
+        n += hookExact(cls, "e", "java.lang.Integer", BIG_MINUTES)
 
         log("PlayEntitlementImpl: $n hooked (b/f)")
+    }
+
+    // ── 3.5 广告奖励阶段强锁（免看广告畅听的核心开关）────────────────
+    /*
+     * 实证链路：
+     *   AdRewardController.G() = IPlayEntitlementCenter.e() 判断阶段
+     *     0        → AD_REWARD_TIME_NULL
+     *     部分     → AD_REWARD_TIME_HALF
+     *     满       → AD_REWARD_TIME_FULL
+     *   M()/N() 均为 (G() == AD_REWARD_TIME_FULL)
+     * 把 G() 直接锁成 FULL，客户端即认为今日广告奖励已领满，不再弹激励广告。
+     */
+    private fun hookRewardStage() = safeRun("RewardStage") {
+        var n = 0
+
+        val fullStage = try {
+            val stageCls = HookKit.loadClass(
+                classLoader,
+                "com.luna.biz.ad.data.reward.RewardStageType\$AD_REWARD_TIME_FULL"
+            )
+            stageCls?.getField("d")?.get(null)
+        } catch (_: Throwable) {
+            null
+        }
+
+        val ctlCls = HookKit.loadClass(classLoader, "com.luna.biz.ad.controller.AdRewardController")
+        if (ctlCls != null) {
+            if (fullStage != null) {
+                n += hookExact(
+                    ctlCls, "G", "com.luna.biz.ad.data.reward.RewardStageType", fullStage
+                )
+            }
+            n += hookTypedFlag(ctlCls, "M", true)
+            n += hookTypedFlag(ctlCls, "N", true)
+        }
+
+        Trace.log(tag, "RewardStage: $n hooked (stage=" + (fullStage != null) + ")")
     }
 
     // ── 4. VipStatus 枚举判定 ───────────────────────────────────────
