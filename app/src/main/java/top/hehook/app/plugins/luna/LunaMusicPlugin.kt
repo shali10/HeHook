@@ -6,6 +6,7 @@ import android.util.Log
 import android.view.View
 import top.hehook.app.core.BasePlugin
 import top.hehook.app.core.HookKit
+import top.hehook.app.core.Trace
 
 /**
  * 汽水音乐 (com.luna.music) v1.1.8 —— 类型守卫保守版
@@ -46,10 +47,10 @@ class LunaMusicPlugin(
     override fun handleHook() {
         val curProc = getCurrentProcessName()
         // 用 Log.e 强制可见：LSPosed 日志页默认保留 error 级，避免被过滤漏掉
-        Log.e(tag, "== HeHook Luna ENTER == proc=$curProc pkg=$packageName sdk=${Build.VERSION.SDK_INT}")
+        Trace.log(tag, "== Luna ENTER == proc=$curProc pkg=$packageName sdk=${Build.VERSION.SDK_INT}")
 
         if (curProc != null && curProc.isNotEmpty() && curProc != packageName) {
-            Log.e(tag, "== skip non-main process: $curProc ==")
+            Trace.log(tag, "== skip non-main process: $curProc ==")
             return
         }
 
@@ -270,7 +271,7 @@ class LunaMusicPlugin(
                 } catch (_: Throwable) {}
             }
         }
-        Log.e(tag, "InstallerSource: $n hooked (spoof=qqdownloader)")
+        Trace.log(tag, "InstallerSource: $n hooked (spoof=qqdownloader)")
     }
 
     // ── 8. PackageBlock 状态放行 ────────────────────────────────────
