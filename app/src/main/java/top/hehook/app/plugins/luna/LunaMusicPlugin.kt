@@ -73,6 +73,7 @@ class LunaMusicPlugin(
         }
 
         hookPackageBlockState()
+        hookBlockUiSuppress()
         hookPackageBlockStatus()
     }
 
@@ -411,23 +412,9 @@ class LunaMusicPlugin(
      */
     private fun hookBlockUiSuppress() = safeRun("BlockUiSuppress") {
         var n = 0
-
-        // A. 业务侧回调：参数 (PackageBlockDelegate, boolean) 的静态方法
-        val dcls = HookKit.loadClass(
-            classLoader,
-            "com.luna.biz.main.init.blockpackage.PackageBlockDelegate"
-        )
-        if (dcls != null) {
-            for (m in dcls.declaredMethods) {
-                if (m.parameterTypes.size != 2) continue
-                if (m.parameterTypes[0].name != dcls.name) continue
-                val t = m.parameterTypes[1]
-                if (t != java.lang.Boolean.TYPE && t != java.lang.Boolean::class.java) continue
-                if (HookKit.hookBefore(m) { chain -> chain.setArg(1, false) }) n++
-            }
-        }
-
-        // B. 混淆 Observer 兜底（19.1.0 实测为 fh.b）
+        // 只改遮罩 Observer 的入参（PackageBlockDelegate 构造器里赋给字段 f 的
+        // 那个 Observer，19.1.0 实测为 fh.b）。不碰 delegate 其它 boolean 方法，
+        // 避免波及播放准入判定导致「点播放无反应」。
         for (cname in listOf("fh.b", "fh.c")) {
             val obsCls = HookKit.loadClass(classLoader, cname) ?: continue
             for (m in obsCls.declaredMethods) {
@@ -435,7 +422,6 @@ class LunaMusicPlugin(
                 if (HookKit.hookBefore(m) { chain -> chain.setArg(0, false) }) n++
             }
         }
-
         Trace.log(tag, "BlockUiSuppress: $n hooked")
     }
 
