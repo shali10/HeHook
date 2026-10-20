@@ -1,9 +1,9 @@
 id=top.hehook.app
 name=HeHook
-version=v1.2.3
-versionCode=123
+version=v1.3.0
+versionCode=130
 author=小禾
 description=现代化 LSPosed 多应用聚合增强框架，基于 Modern LibXposed (API 101) 构建，零 SO 依赖、纯单机、零反射损耗、全版本通杀。
-minApiVersion=102
-targetApiVersion=102
+minApiVersion=101
+targetApiVersion=101
 staticScope=false

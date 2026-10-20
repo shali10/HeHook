@@ -31,6 +31,8 @@ class LunaMusicPlugin(
         private const val FAR_FUTURE_MS = 4102444800000L
         private const val BIG_INT = 9999
         private const val BIG_MINUTES = 99999
+        /** 服务端「版本被 block」状态码：PackageBlockInterceptor 判定 0xf427e 才弹窗 */
+        private const val BLOCK_CODE = 0xf427e
 
         private const val PKG_ENTITY = "com.luna.biz.entitlement.core.commerceinfo.entity"
         private const val PLAY_ENTITY = "$PKG_ENTITY.CommerceInfoPlayEntitlementEntity"
@@ -73,6 +75,7 @@ class LunaMusicPlugin(
         }
 
         hookPackageBlockState()
+        hookPackageBlockStatus()
     }
 
     // ── 类型守卫工具：按真实返回类型给值，签名不符直接跳过 ──────────────
@@ -272,6 +275,66 @@ class LunaMusicPlugin(
             }
         }
         Trace.log(tag, "InstallerSource: $n hooked (spoof=qqdownloader)")
+    }
+
+    // ── 9. 服务端 block 状态码消毒（核心：1000062 → 0）──────────────
+    /*
+     * 静态实证：
+     *   PackageBlockInterceptor.intercept() 里
+     *     if (statusCode == 0xf427e) blockLiveData.postValue(true)
+     *   0xf427e = 1000062，是服务端下发的"版本不安全"判定码。
+     *   判定在云端，本地只能把这个码在响应体里改掉。
+     */
+    private fun hookPackageBlockStatus() = safeRun("PackageBlockStatus") {
+        var n = 0
+
+        // A. 全局消毒：任何写入 statusCode 的路径，只要值等于判定码就改成 0
+        val respCls = HookKit.loadClass(classLoader, "com.luna.common.arch.net.BaseResponseNoKeep")
+        if (respCls != null) {
+            for (m in respCls.declaredMethods) {
+                if (m.name != "setStatusCode") continue
+                if (m.parameterTypes.size != 1) continue
+                val pt = m.parameterTypes[0]
+                if (pt != java.lang.Integer.TYPE && pt != java.lang.Integer::class.java) continue
+                if (HookKit.hookBefore(m) { chain ->
+                        val v = chain.args.firstOrNull() as? Int
+                        if (v == BLOCK_CODE) chain.setArg(0, 0)
+                    }) n++
+            }
+        }
+
+        // B. 判定点兜底：拦截器返回前直接清洗响应体
+        val icls = HookKit.loadClass(
+            classLoader,
+            "com.luna.biz.main.init.blockpackage.PackageBlockInterceptor"
+        )
+        if (icls != null) {
+            for (m in icls.declaredMethods) {
+                if (m.name != "intercept" || m.parameterTypes.size != 1) continue
+                try {
+                    hookMethod(m) { chain ->
+                        val resp = chain.proceed()
+                        try {
+                            val body = resp?.javaClass?.getMethod("body")?.invoke(resp)
+                            if (body != null) {
+                                val sc = body.javaClass
+                                    .getMethod("getStatusCode")
+                                    .invoke(body) as? Int
+                                if (sc == BLOCK_CODE) {
+                                    body.javaClass
+                                        .getMethod("setStatusCode", java.lang.Integer.TYPE)
+                                        .invoke(body, 0)
+                                }
+                            }
+                        } catch (_: Throwable) {}
+                        resp
+                    }
+                    n++
+                } catch (_: Throwable) {}
+            }
+        }
+
+        Trace.log(tag, "PackageBlockStatus: $n hooked (blockCode=$BLOCK_CODE)")
     }
 
     // ── 8. PackageBlock 状态放行 ────────────────────────────────────
