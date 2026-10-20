@@ -67,6 +67,7 @@ class LunaMusicPlugin(
             hookPlayEntitlementImpl()
             hookRewardStage()
             hookVipStatusEnum()
+            hookUserTier()
             hookMemberShipVip()
             hookCommerceMemberShip()
         }
@@ -204,6 +205,25 @@ class LunaMusicPlugin(
         n += hookTypedFlag(cls, "isVip", true)
         n += hookTypedFlag(cls, "isSVip", true)
         log("VipStatus: $n enum methods hooked")
+    }
+
+    // ── 4.5 用户层级总开关：UserTier.T() → svip_user ──────────────────
+    /*
+     * 实证：MemberShipCenterImpl.isVip() 的实现是
+     *   String tier = UserTier.q.T();
+     *   if (tier.isEmpty()) return false;
+     *   switch (tier.hashCode()) { case "vip_user"/"svip_user"/"slim_vip_user"/"free_vip_user" -> true }
+     * 合法取值仅五种：free_user / free_vip_user / slim_vip_user / vip_user / svip_user。
+     * 锁成最高档 svip_user，所有依赖 UserTier 的会员判定会一起变真，
+     * 比逐个 hook isVip()/j()/k() 可靠得多。
+     */
+    private fun hookUserTier() = safeRun("UserTier") {
+        val cls = HookKit.loadClass(classLoader, "com.luna.common.arch.config.UserTier")
+        var n = 0
+        if (cls != null) {
+            n += hookExact(cls, "T", "java.lang.String", "svip_user")
+        }
+        Trace.log(tag, "UserTier: $n hooked (tier=svip_user)")
     }
 
     // ── 5. 会员中心：只锁 isVip() 与 a()（返回 VipStatus）─────────────
