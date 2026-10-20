@@ -45,12 +45,15 @@ class LunaMusicPlugin(
 
     override fun handleHook() {
         val curProc = getCurrentProcessName()
-        if (curProc != null && curProc != packageName) {
-            log("Ignoring non-main process: $curProc")
+        // 用 Log.e 强制可见：LSPosed 日志页默认保留 error 级，避免被过滤漏掉
+        Log.e(tag, "== HeHook Luna ENTER == proc=$curProc pkg=$packageName sdk=${Build.VERSION.SDK_INT}")
+
+        if (curProc != null && curProc.isNotEmpty() && curProc != packageName) {
+            Log.e(tag, "== skip non-main process: $curProc ==")
             return
         }
 
-        log("Loading LunaMusicPlugin v1.1.9 (Type-Guard + Channel Spoof) for [$packageName]...")
+        log("Loading LunaMusicPlugin v1.2.0 (Diag Edition) for [$packageName]...")
 
         // 0. 安装来源伪装 —— 必须最先执行，晚于客户端自检就会弹「当前版本不安全」
         hookInstallerSource()
@@ -267,7 +270,7 @@ class LunaMusicPlugin(
                 } catch (_: Throwable) {}
             }
         }
-        log("InstallerSource: $n hooked (spoof=qqdownloader)")
+        Log.e(tag, "InstallerSource: $n hooked (spoof=qqdownloader)")
     }
 
     // ── 8. PackageBlock 状态放行 ────────────────────────────────────
