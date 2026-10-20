@@ -76,6 +76,7 @@ class LunaMusicPlugin(
 
         hookPackageBlockState()
         hookPackageBlockStatus()
+        hookBlockUiSuppress()
     }
 
     // ── 类型守卫工具：按真实返回类型给值，签名不符直接跳过 ──────────────
@@ -320,10 +321,14 @@ class LunaMusicPlugin(
                                 val sc = body.javaClass
                                     .getMethod("getStatusCode")
                                     .invoke(body) as? Int
+                                if (sc != null && sc != 0) {
+                                    Trace.log(tag, "PB intercept code=$sc")
+                                }
                                 if (sc == BLOCK_CODE) {
                                     body.javaClass
                                         .getMethod("setStatusCode", java.lang.Integer.TYPE)
                                         .invoke(body, 0)
+                                    Trace.log(tag, "PB blockCode neutralized -> 0")
                                 }
                             }
                         } catch (_: Throwable) {}
@@ -335,6 +340,45 @@ class LunaMusicPlugin(
         }
 
         Trace.log(tag, "PackageBlockStatus: $n hooked (blockCode=$BLOCK_CODE)")
+    }
+
+    // ── 10. UI 层兜底：Observer 收到的 block 布尔值直接改 false ────────
+    /*
+     * 实证链路：
+     *   PackageBlockInterceptor.postValue(true)
+     *     → fh.b.onChanged(Object)  { check-cast Boolean; booleanValue() }
+     *     → PackageBlockDelegate.e(delegate, Z)  → inflate 遮罩 ViewStub
+     * 直接在这两处把布尔值改 false，遮罩永远不 inflate，
+     * 不受服务端状态码变化、混淆名变动影响。
+     */
+    private fun hookBlockUiSuppress() = safeRun("BlockUiSuppress") {
+        var n = 0
+
+        // A. 业务侧回调：参数 (PackageBlockDelegate, boolean) 的静态方法
+        val dcls = HookKit.loadClass(
+            classLoader,
+            "com.luna.biz.main.init.blockpackage.PackageBlockDelegate"
+        )
+        if (dcls != null) {
+            for (m in dcls.declaredMethods) {
+                if (m.parameterTypes.size != 2) continue
+                if (m.parameterTypes[0].name != dcls.name) continue
+                val t = m.parameterTypes[1]
+                if (t != java.lang.Boolean.TYPE && t != java.lang.Boolean::class.java) continue
+                if (HookKit.hookBefore(m) { chain -> chain.setArg(1, false) }) n++
+            }
+        }
+
+        // B. 混淆 Observer 兜底（19.1.0 实测为 fh.b）
+        for (cname in listOf("fh.b", "fh.c")) {
+            val obsCls = HookKit.loadClass(classLoader, cname) ?: continue
+            for (m in obsCls.declaredMethods) {
+                if (m.name != "onChanged" || m.parameterTypes.size != 1) continue
+                if (HookKit.hookBefore(m) { chain -> chain.setArg(0, false) }) n++
+            }
+        }
+
+        Trace.log(tag, "BlockUiSuppress: $n hooked")
     }
 
     // ── 8. PackageBlock 状态放行 ────────────────────────────────────
