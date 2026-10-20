@@ -223,8 +223,11 @@ class LunaMusicPlugin(
             classLoader,
             "com.luna.common.arch.config.commercial.ad.AdSettingsConfig\$CommonSplashAdConfig"
         )
-        n += hookExact(configCls, "getSwitchShowAd", "java.lang.Boolean", false)
-        n += hookExact(configCls, "getSwitchShowBrandAd", "java.lang.Boolean", false)
+        n += hookExact(configCls, "getSwitchShowAd", "int", 0)
+        n += hookExact(configCls, "getSwitchShowBrandAd", "int", 0)
+
+        // 冷启动广告策略模式归零（0 = 不走优化模式，直接无广告）
+        n += hookExact(configCls, "getColdSplashOptMode", "int", 0)
 
         val compositeViewCls = HookKit.loadClass(
             classLoader,
