@@ -61,16 +61,12 @@ class LunaMusicPlugin(
         // 0. 安装来源伪装 —— 必须最先执行，晚于客户端自检就会弹「当前版本不安全」
         hookInstallerSource()
 
-        if (isEnabled("unlock_vip", true)) {
-            hookRewardTaskInfo()
-            hookPlayEntitlementEntity()
-            hookPlayEntitlementImpl()
-            hookRewardStage()
-            hookVipStatusEnum()
-            hookUserTier()
-            hookMemberShipVip()
-            hookCommerceMemberShip()
-        }
+        // ── VIP / 权益相关 hook 已整体移除（v1.4.0）──────────────────
+        // 实测结论：汽水音乐音源由服务端按账号权益签发。本地改写
+        // PlayEntitlement / RewardStage / UserTier 只会让界面判定与服务端
+        // 实际授权脱节，表现为「提示开通会员」或播放时「网络错误」。
+        // 现版本只保留去广告与反拦截能力，播放行为完全回到官方原版。
+        // 相关方法体仍保留在文件内（hookRewardTaskInfo 等），需要时再挂。
 
         if (isEnabled("remove_visual_ads", true)) {
             hookSplashAd()
