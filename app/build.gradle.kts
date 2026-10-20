@@ -11,8 +11,8 @@ android {
         applicationId = "top.hehook.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 140
-        versionName = "1.4.0"
+        versionCode = 141
+        versionName = "1.4.1"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))

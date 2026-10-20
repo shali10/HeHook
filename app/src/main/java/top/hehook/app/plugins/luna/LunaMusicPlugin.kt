@@ -74,7 +74,6 @@ class LunaMusicPlugin(
 
         hookPackageBlockState()
         hookPackageBlockStatus()
-        hookBlockUiSuppress()
     }
 
     // ── 类型守卫工具：按真实返回类型给值，签名不符直接跳过 ──────────────
@@ -442,21 +441,11 @@ class LunaMusicPlugin(
 
     // ── 8. PackageBlock 状态放行 ────────────────────────────────────
     private fun hookPackageBlockState() = safeRun("PackageBlockState") {
+        // 只锁语义明确的全局状态查询，不再无差别改写 PackageBlockDelegate 的
+        // 全部 boolean 方法（实测会波及播放控制，表现为点播放无响应）。
         val mainServiceCls = HookKit.loadClass(classLoader, "com.luna.biz.main.MainServiceImpl")
         var n = 0
         n += hookTypedFlag(mainServiceCls, "getPackageBlockState", false)
-
-        val delegateCls = HookKit.loadClass(
-            classLoader,
-            "com.luna.biz.main.init.blockpackage.PackageBlockDelegate"
-        )
-        if (delegateCls != null) {
-            for (m in delegateCls.declaredMethods) {
-                if (m.returnType == java.lang.Boolean.TYPE || m.returnType == java.lang.Boolean::class.java) {
-                    if (HookKit.hookBefore(m) { it.setResult(false) }) n++
-                }
-            }
-        }
         log("PackageBlockState: $n hooked")
     }
 
