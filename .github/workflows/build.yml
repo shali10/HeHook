@@ -33,5 +33,5 @@ jobs:
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: HeHook-v1.1.7-Release
+        name: HeHook-v1.1.8-Release
         path: app/build/outputs/apk/release/*.apk
