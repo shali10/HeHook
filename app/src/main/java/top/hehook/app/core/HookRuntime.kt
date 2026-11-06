@@ -1,6 +1,7 @@
 package top.hehook.app.core
 
 import io.github.libxposed.api.XposedModule
+import java.lang.reflect.Executable
 import java.lang.reflect.Member
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -45,6 +46,11 @@ object HookRuntime {
     fun hook(member: Member, interceptor: (io.github.libxposed.api.XposedInterface.Chain) -> Any?): Boolean {
         val m = module ?: run {
             Trace.log("HeHook_Runtime", "后端未安装，无法 hook ${member.name}")
+            HookStats.failed.incrementAndGet()
+            return false
+        }
+        if (member !is Executable) {
+            Trace.log("HeHook_Runtime", "目标不是方法/构造器：${member.name}")
             HookStats.failed.incrementAndGet()
             return false
         }
