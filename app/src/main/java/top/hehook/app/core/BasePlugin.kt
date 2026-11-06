@@ -44,14 +44,9 @@ abstract class BasePlugin(
      */
     fun hookMethod(method: Member, hooker: (XposedInterface.Chain) -> Any?) {
         if (method is Executable) {
-            try {
-                MainRouter.instance.hook(method).intercept { chain ->
-                    hooker(chain)
-                }
-                log("Intercepted: ${method.declaringClass.name}#${method.name}")
-            } catch (t: Throwable) {
-                logError("Failed to intercept ${method.name}", t)
-            }
+            val ok = HookRuntime.hook(method) { chain -> hooker(chain) }
+            if (ok) log("Intercepted: ${method.declaringClass.name}#${method.name}")
+            else logError("Intercept failed: ${method.declaringClass.name}#${method.name}")
         }
     }
 
@@ -77,7 +72,8 @@ abstract class BasePlugin(
     }
 
     fun log(message: String) {
-        Log.i(tag, "[$packageName] $message")
+        // LSPosed 日志页默认只显示 error 级别，诊断日志一律走 Log.e
+        Log.e(tag, "[$packageName] $message")
     }
 
     fun logError(message: String, throwable: Throwable? = null) {

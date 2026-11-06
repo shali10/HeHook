@@ -1,7 +1,49 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 }
+
+// ---------------------------------------------------------------- 版本单源
+val versionProps = Properties().apply {
+    val f = rootProject.file("version.properties")
+    if (f.exists()) f.inputStream().use { load(it) }
+}
+val appVersionName: String = versionProps.getProperty("versionName") ?: "0.0.0"
+val appVersionCode: Int = (versionProps.getProperty("versionCode") ?: "1").toInt()
+
+/**
+ * 校验 module.prop 与 version.properties 一致。
+ * 版本号以前散在三处（gradle / module.prop / CI artifact 名），漏改一处就是版本错乱，
+ * 现在不一致直接让构建失败。
+ */
+val verifyModuleProp by tasks.registering {
+    val propFile = rootProject.file("app/src/main/resources/META-INF/xposed/module.prop")
+    val expectedName = "v$appVersionName"
+    val expectedCode = appVersionCode.toString()
+    doLast {
+        val text = propFile.readText()
+        val nameLine = Regex("^version=(.+)$", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)?.trim()
+        val codeLine = Regex("^versionCode=(.+)$", RegexOption.MULTILINE).find(text)?.groupValues?.get(1)?.trim()
+        require(nameLine == expectedName) {
+            "module.prop 的 version=$nameLine 与 version.properties 的 $expectedName 不一致"
+        }
+        require(codeLine == expectedCode) {
+            "module.prop 的 versionCode=$codeLine 与 version.properties 的 $expectedCode 不一致"
+        }
+    }
+}
+
+// ---------------------------------------------------------------- 签名
+// 密钥不再进仓库：本地放 app/hehook-release.jks（已 gitignore），CI 由 secret 还原。
+val keystoreOverride: String? = System.getenv("HEHOOK_KEYSTORE")
+val keystoreFile: File = if (keystoreOverride != null) {
+    File(keystoreOverride)
+} else {
+    rootProject.file("app/hehook-release.jks")
+}
+val keystoreReady = keystoreFile.exists()
 
 android {
     namespace = "top.hehook.app"
@@ -11,30 +53,34 @@ android {
         applicationId = "top.hehook.app"
         minSdk = 26
         targetSdk = 34
-        versionCode = 142
-        versionName = "1.4.2"
+        versionCode = appVersionCode
+        versionName = appVersionName
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "armeabi-v7a"))
         }
     }
 
-    signingConfigs {
-        create("release") {
-            storeFile = file("hehook.jks")
-            storePassword = "hehook123456"
-            keyAlias = "hehook"
-            keyPassword = "hehook123456"
-            enableV1Signing = true
-            enableV2Signing = true
-            enableV3Signing = true
+    if (keystoreReady) {
+        signingConfigs {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = System.getenv("HEHOOK_STORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("HEHOOK_KEY_ALIAS") ?: "hehook"
+                keyPassword = System.getenv("HEHOOK_KEY_PASSWORD") ?: ""
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
         }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("release")
+            if (keystoreReady) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -50,8 +96,11 @@ android {
     }
     buildFeatures {
         viewBinding = true
+        buildConfig = true
     }
 }
+
+tasks.named("preBuild").configure { dependsOn(verifyModuleProp) }
 
 dependencies {
     // AndroidX & UI

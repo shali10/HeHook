@@ -13,6 +13,16 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
 
+    - name: Read version (single source)
+      id: ver
+      run: |
+        VN=$(grep -E '^versionName=' version.properties | cut -d= -f2 | tr -d '[:space:]')
+        VC=$(grep -E '^versionCode=' version.properties | cut -d= -f2 | tr -d '[:space:]')
+        if [ -z "$VN" ] || [ -z "$VC" ]; then echo "version.properties 缺失或格式错误"; exit 1; fi
+        echo "name=$VN" >> "$GITHUB_OUTPUT"
+        echo "code=$VC" >> "$GITHUB_OUTPUT"
+        echo "本次构建 v$VN ($VC)"
+
     - name: Set up JDK 17
       uses: actions/setup-java@v4
       with:
@@ -24,14 +34,42 @@ jobs:
       with:
         gradle-version: '8.6'
 
+    - name: Restore release keystore
+      env:
+        KEYSTORE_B64: ${{ secrets.HEHOOK_KEYSTORE_B64 }}
+        STORE_PASSWORD: ${{ secrets.HEHOOK_STORE_PASSWORD }}
+      run: |
+        if [ -z "$KEYSTORE_B64" ] || [ -z "$STORE_PASSWORD" ]; then
+          echo "::error::缺少 HEHOOK_KEYSTORE_B64 / HEHOOK_STORE_PASSWORD secret，拒绝产出未签名包"
+          exit 1
+        fi
+        echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/hehook-release.jks"
+        echo "keystore restored: $(stat -c%s "$RUNNER_TEMP/hehook-release.jks") bytes"
+
     - name: Generate Gradle Wrapper
       run: gradle wrapper --gradle-version 8.6
 
-    - name: Build APKs with Gradle
+    - name: Build APK
+      env:
+        HEHOOK_KEYSTORE: ${{ runner.temp }}/hehook-release.jks
+        HEHOOK_STORE_PASSWORD: ${{ secrets.HEHOOK_STORE_PASSWORD }}
+        HEHOOK_KEY_ALIAS: ${{ secrets.HEHOOK_KEY_ALIAS }}
+        HEHOOK_KEY_PASSWORD: ${{ secrets.HEHOOK_KEY_PASSWORD }}
       run: ./gradlew assembleRelease --stacktrace
+
+    - name: Verify signature and version
+      run: |
+        APK=$(ls app/build/outputs/apk/release/*.apk | head -1)
+        echo "APK: $APK"
+        BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+        "$BT/apksigner" verify --print-certs "$APK"
+        "$BT/aapt" dump badging "$APK" | head -2
+        case "$APK" in
+          *unsigned*) echo "::error::产出的是未签名包"; exit 1 ;;
+        esac
 
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: HeHook-v1.4.2-Release
+        name: HeHook-v${{ steps.ver.outputs.name }}-Release
         path: app/build/outputs/apk/release/*.apk

@@ -4,27 +4,29 @@ import android.util.Log
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
 import java.lang.reflect.Constructor
-import java.lang.reflect.Field
-import java.lang.reflect.Member
 import java.lang.reflect.Method
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * 现代 LibXposed 纯反射与拦截工具套件
  * 零 SO 依赖，异常全量隔离，确保宿主稳健运行
+ *
+ * v1.5.0 改造：
+ * - 后端从 `MainRouter.instance` 单例改为 [HookRuntime]，老入口 / 单元测试都不会再踩 lateinit
+ * - 每个 hook 成功 / 失败都进 [HookStats]，入口直接打汇总，不再「看着挂上了其实一条没生效」
+ * - 失败统一 Log.e，LSPosed 日志页可见
  */
 object HookKit {
     private const val TAG = "HeHook_HookKit"
-    var module: XposedModule? = null
 
     private val classCache = ConcurrentHashMap<String, Class<*>?>()
     private val nullClassMarker = Any::class.java
 
     fun init(xposedModule: XposedModule) {
-        module = xposedModule
+        HookRuntime.install(xposedModule)
     }
 
-    fun isReady(): Boolean = module != null
+    fun isReady(): Boolean = HookRuntime.isReady()
 
     fun loadClass(classLoader: ClassLoader?, className: String?): Class<*>? {
         if (className.isNullOrBlank()) return null
@@ -36,6 +38,7 @@ object HookKit {
             classCache[className] = found
         } else {
             classCache[className] = nullClassMarker
+            HookStats.missing.incrementAndGet()
         }
         return found
     }
@@ -96,20 +99,16 @@ object HookKit {
         }
     }
 
-    fun hookBefore(
-        method: Method?,
-        callback: (Chain) -> Unit
-    ): Boolean {
+    fun hookBefore(method: Method?, callback: (Chain) -> Unit): Boolean {
         if (method == null || !isReady()) return false
-        val mod = module ?: return false
         return try {
             method.isAccessible = true
-            mod.hook(method).intercept { chain ->
+            HookRuntime.hook(method) { chain ->
                 val ctx = ChainImpl(chain)
                 try {
                     callback(ctx)
                 } catch (t: Throwable) {
-                    Log.w(TAG, "Exception in hookBefore callback for ${method.name}: ${t.message}")
+                    Log.e(TAG, "hookBefore 回调异常 ${method.name}", t)
                 }
                 if (ctx.skipped) {
                     if (ctx.hasResult) ctx.customResult else defaultValue(method.returnType)
@@ -118,9 +117,9 @@ object HookKit {
                     if (na != null) chain.proceed(na) else chain.proceed()
                 }
             }
-            true
         } catch (t: Throwable) {
-            Log.e(TAG, "Failed to hook method ${method.name}", t)
+            HookStats.failed.incrementAndGet()
+            Log.e(TAG, "hookBefore 失败 ${method.name}", t)
             false
         }
     }
@@ -136,26 +135,23 @@ object HookKit {
             val m = cls.getDeclaredMethod(methodName, *paramTypes)
             hookBefore(m, callback)
         } catch (t: Throwable) {
+            HookStats.failed.incrementAndGet()
+            Log.e(TAG, "hookBeforeExact 找不到 ${cls.name}#$methodName", t)
             false
         }
     }
 
-    fun hookAllByName(
-        cls: Class<*>?,
-        methodName: String,
-        callback: (Chain) -> Unit
-    ): Int {
-        if (cls == null || !isReady()) return 0
+    fun hookAllByName(cls: Class<*>?, methodName: String, callback: (Chain) -> Unit): Int {
+        if (cls == null) return 0
         var count = 0
         try {
             for (m in cls.declaredMethods) {
-                if (m.name == methodName) {
-                    if (hookBefore(m, callback)) {
-                        count++
-                    }
-                }
+                if (m.name == methodName && hookBefore(m, callback)) count++
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.e(TAG, "hookAllByName 异常 ${cls.name}#$methodName", t)
+        }
+        if (count == 0) HookStats.failed.incrementAndGet()
         return count
     }
 
@@ -165,107 +161,90 @@ object HookKit {
         afterCallback: (thisObj: Any?, result: Any?, args: List<Any?>) -> Unit
     ): Int {
         if (cls == null || !isReady()) return 0
-        val mod = module ?: return 0
         var count = 0
         try {
             for (m in cls.declaredMethods) {
-                if (m.name == methodName) {
-                    m.isAccessible = true
+                if (m.name != methodName) continue
+                m.isAccessible = true
+                val ok = HookRuntime.hook(m) { chain ->
+                    val res = chain.proceed()
                     try {
-                        mod.hook(m).intercept { chain ->
-                            val res = chain.proceed()
-                            try {
-                                afterCallback(chain.thisObject, res, chain.args ?: emptyList())
-                            } catch (t: Throwable) {
-                                Log.w(TAG, "Exception in hookAllAfterByName: ${t.message}")
-                            }
-                            res
-                        }
-                        count++
-                    } catch (_: Throwable) {}
+                        afterCallback(chain.thisObject, res, chain.args ?: emptyList())
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "hookAllAfterByName 回调异常 ${m.name}", t)
+                    }
+                    res
                 }
+                if (ok) count++
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.e(TAG, "hookAllAfterByName 异常 ${cls.name}#$methodName", t)
+        }
+        if (count == 0) HookStats.failed.incrementAndGet()
         return count
     }
 
-    fun hookAllConstructors(
-        cls: Class<*>?,
-        afterCallback: (thisObj: Any?, args: List<Any?>) -> Unit
-    ): Int {
+    fun hookAllConstructors(cls: Class<*>?, afterCallback: (thisObj: Any?, args: List<Any?>) -> Unit): Int {
         if (cls == null || !isReady()) return 0
-        val mod = module ?: return 0
         var count = 0
         try {
             for (c in cls.declaredConstructors) {
                 c.isAccessible = true
-                try {
-                    mod.hook(c).intercept { chain ->
-                        val res = chain.proceed()
-                        try {
-                            afterCallback(chain.thisObject, chain.args ?: emptyList())
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "Exception in hookAllConstructors: ${t.message}")
-                        }
-                        res
+                val ok = HookRuntime.hook(c) { chain ->
+                    val res = chain.proceed()
+                    try {
+                        afterCallback(chain.thisObject, chain.args ?: emptyList())
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "构造器回调异常 ${cls.name}", t)
                     }
-                    count++
-                } catch (_: Throwable) {}
+                    res
+                }
+                if (ok) count++
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.e(TAG, "hookAllConstructors 异常 ${cls.name}", t)
+        }
+        if (count == 0) HookStats.failed.incrementAndGet()
         return count
     }
 
-    /**
-     * 拦截构造函数并在执行前修改入参 (纯零反射源头注入)
-     */
-    fun hookAllConstructorsBefore(
-        cls: Class<*>?,
-        callback: (Constructor<*>, Chain) -> Unit
-    ): Int {
+    /** 拦截构造函数并在执行前修改入参 */
+    fun hookAllConstructorsBefore(cls: Class<*>?, callback: (Constructor<*>, Chain) -> Unit): Int {
         if (cls == null || !isReady()) return 0
-        val mod = module ?: return 0
         var count = 0
         try {
             for (c in cls.declaredConstructors) {
                 c.isAccessible = true
-                try {
-                    mod.hook(c).intercept { chain ->
-                        val ctx = ChainImpl(chain)
-                        try {
-                            callback(c, ctx)
-                        } catch (t: Throwable) {
-                            Log.w(TAG, "Exception in hookAllConstructorsBefore: ${t.message}")
-                        }
-                        val na = ctx.newArgs
-                        if (na != null) chain.proceed(na) else chain.proceed()
+                val ok = HookRuntime.hook(c) { chain ->
+                    val ctx = ChainImpl(chain)
+                    try {
+                        callback(c, ctx)
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "构造器前置回调异常 ${cls.name}", t)
                     }
-                    count++
-                } catch (_: Throwable) {}
+                    val na = ctx.newArgs
+                    if (na != null) chain.proceed(na) else chain.proceed()
+                }
+                if (ok) count++
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.e(TAG, "hookAllConstructorsBefore 异常 ${cls.name}", t)
+        }
+        if (count == 0) HookStats.failed.incrementAndGet()
         return count
     }
 
-    /**
-     * 条件匹配拦截类中的方法
-     */
-    fun hookAllMatchingMethods(
-        cls: Class<*>?,
-        matcher: (Method) -> Boolean,
-        callback: (Chain) -> Unit
-    ): Int {
+    /** 条件匹配拦截类中的方法 */
+    fun hookAllMatchingMethods(cls: Class<*>?, matcher: (Method) -> Boolean, callback: (Chain) -> Unit): Int {
         if (cls == null || !isReady()) return 0
         var count = 0
         try {
             for (m in cls.declaredMethods) {
-                if (matcher(m)) {
-                    if (hookBefore(m, callback)) {
-                        count++
-                    }
-                }
+                if (matcher(m) && hookBefore(m, callback)) count++
             }
-        } catch (_: Throwable) {}
+        } catch (t: Throwable) {
+            Log.e(TAG, "hookAllMatchingMethods 异常 ${cls.name}", t)
+        }
         return count
     }
 
@@ -286,7 +265,7 @@ object HookKit {
                 return
             } catch (_: NoSuchFieldException) {
                 curr = curr.superclass
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
                 return
             }
         }
@@ -303,7 +282,7 @@ object HookKit {
                 return
             } catch (_: NoSuchFieldException) {
                 curr = curr.superclass
-            } catch (_: Throwable) {
+            } catch (t: Throwable) {
                 return
             }
         }

@@ -3,250 +3,367 @@ package top.hehook.app.ui
 import android.app.ActivityManager
 import android.content.Context
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Space
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
+import androidx.core.graphics.ColorUtils
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.snackbar.Snackbar
+import top.hehook.app.BuildConfig
 import top.hehook.app.R
+import top.hehook.app.core.AppSpec
 import top.hehook.app.core.ConfigManager
-import top.hehook.app.databinding.ActivityMainBinding
+import top.hehook.app.core.Feature
+import top.hehook.app.core.PluginRegistry
 
+/**
+ * 管理端主界面。
+ *
+ * v1.5.0 起整页由 [PluginRegistry] 数据驱动、全部在代码里构建：
+ * 加一个受控应用不用再改 XML、不用再补四张硬编码卡片。
+ */
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var binding: ActivityMainBinding
-
-    companion object {
-        const val PKG_HONGGUO = "com.phoenix.read"
-        const val PKG_FANQIE = "com.dragon.read"
-        const val PKG_BILI = "tv.danmaku.bili"
-        const val PKG_LUNA = "com.luna.music"
-    }
+    private val cardBackgrounds = mutableListOf<Pair<LinearLayout, AppSpec>>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
-
-        initHeaderActions()
-        initHongGuoSettings()
-        initFanQieSettings()
-        initBiliSettings()
-        initLunaSettings()
-        updateInstalledStatus()
+        setContentView(buildRoot())
     }
 
     override fun onResume() {
         super.onResume()
-        updateInstalledStatus()
+        refreshStatus()
     }
 
-    private fun initHeaderActions() {
-        binding.btnAbout.setOnClickListener {
-            showAboutDialog()
+    // ---------------------------------------------------------------- 构建界面
+
+    private fun buildRoot(): View {
+        val scroll = ScrollView(this).apply {
+            setBackgroundColor(c("background"))
+            isFillViewport = true
+        }
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), dp(28), dp(20), dp(36))
+        }
+        scroll.addView(root, LinearLayout.LayoutParams(MATCH, WRAP))
+
+        root.addView(buildHeader())
+        root.addView(buildHero(), lp(top = 18f))
+
+        PluginRegistry.apps.forEach { spec ->
+            val card = buildAppCard(spec)
+            root.addView(card, lp(top = 14f))
+            cardBackgrounds += card to spec
         }
 
-        binding.btnRestartAll.setOnClickListener {
-            restartAllApps()
+        root.addView(buildFooter(), lp(top = 22f))
+        return scroll
+    }
+
+    private fun buildHeader(): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        titles.addView(text("HeHook", 26f, c("text_primary"), bold = true))
+        titles.addView(
+            text("按下即生效的聚合增强 · v${BuildConfig.VERSION_NAME}", 12.5f, c("text_tertiary"), topDp = 4),
+        )
+        row.addView(titles, LinearLayout.LayoutParams(0, WRAP, 1f))
+        row.addView(chip("已就绪", c("ok"), ColorUtils.setAlphaComponent(c("ok"), 0x24)))
+        return row
+    }
+
+    private fun buildHero(): View {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(18), dp(18), dp(18), dp(18))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.RECTANGLE
+                cornerRadius = dp(22).toFloat()
+                colors = intArrayOf(
+                    ColorUtils.setAlphaComponent(c("accent"), 0x2E),
+                    ColorUtils.setAlphaComponent(c("card"), 0xFF),
+                )
+                orientation = GradientDrawable.Orientation.TL_BR
+                setStroke(dp(1), ColorUtils.setAlphaComponent(c("accent"), 0x44))
+            }
+        }
+
+        val status = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        status.addView(View(this).apply {
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(c("ok"))
+            }
+        }, LinearLayout.LayoutParams(dp(7), dp(7)).apply { rightMargin = dp(9) })
+        status.addView(text("LSPosed 模块已注入，宿主启动即接管", 12.5f, c("text_secondary")))
+        card.addView(status)
+
+        val stats = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            weightSum = 3f
+        }
+        stats.addView(statBlock(PluginRegistry.apps.size.toString(), "托管应用"), weightP(1f))
+        stats.addView(statBlock(PluginRegistry.featureCount.toString(), "增强策略"), weightP(1f))
+        stats.addView(statBlock("101", "LibXposed API"), weightP(1f))
+        card.addView(stats, lp(top = 16f))
+
+        val restart = text("一键重启全部受控应用", 13.5f, Color.WHITE, bold = true).apply {
+            gravity = Gravity.CENTER
+            setPadding(0, dp(13), 0, dp(13))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(14).toFloat()
+                setColor(c("accent"))
+            }
+            setOnClickListener { restartAll() }
+        }
+        card.addView(restart, lp(top = 16f))
+        return card
+    }
+
+    private fun statBlock(value: String, label: String): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(text(value, 22f, c("text_primary"), bold = true))
+        box.addView(text(label, 11.5f, c("text_tertiary"), topDp = 3))
+        return box
+    }
+
+    private fun buildAppCard(spec: AppSpec): LinearLayout {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(16), dp(16), dp(16), dp(14))
+            background = GradientDrawable().apply {
+                cornerRadius = dp(20).toFloat()
+                setColor(c("card"))
+                setStroke(dp(1), c("line"))
+            }
+        }
+
+        val head = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val brand = c(spec.colorRes)
+        val tile = text(spec.letter, 17f, brand, bold = true).apply {
+            gravity = Gravity.CENTER
+            background = GradientDrawable().apply {
+                cornerRadius = dp(13).toFloat()
+                setColor(ColorUtils.setAlphaComponent(brand, 0x26))
+                setStroke(dp(1), ColorUtils.setAlphaComponent(brand, 0x55))
+            }
+        }
+        head.addView(tile, LinearLayout.LayoutParams(dp(42), dp(42)).apply { rightMargin = dp(13) })
+
+        val titles = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        titles.addView(text(spec.name, 15.5f, c("text_primary"), bold = true))
+        titles.addView(text(spec.tagline, 11.5f, c("text_tertiary"), topDp = 3))
+        head.addView(titles, LinearLayout.LayoutParams(0, WRAP, 1f))
+
+        val statusChip = chip("检测中", c("text_tertiary"), c("line_soft"))
+        statusChip.tag = "status_chip"
+        head.addView(statusChip)
+
+        card.addView(head)
+
+        spec.features.forEach { feature ->
+            card.addView(buildFeatureRow(spec, feature))
+        }
+
+        val divider = View(this).apply { setBackgroundColor(c("line_soft")) }
+        card.addView(divider, LinearLayout.LayoutParams(MATCH, dp(1)).apply { topMargin = dp(10) })
+
+        val restart = text("重启 ${spec.name}", 12.5f, c("text_secondary")).apply {
+            setPadding(0, dp(10), 0, 0)
+            setOnClickListener { restartPackage(spec.pkg, spec.name) }
+        }
+        card.addView(restart)
+
+        return card
+    }
+
+    private fun buildFeatureRow(spec: AppSpec, feature: Feature): View {
+        val row = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val texts = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        texts.addView(text(feature.title, 13.5f, c("text_primary")))
+        texts.addView(text(feature.desc, 11f, c("text_tertiary"), topDp = 2))
+        row.addView(texts, LinearLayout.LayoutParams(0, WRAP, 1f).apply { topMargin = dp(12) })
+
+        val switch = SwitchCompat(this).apply {
+            isChecked = ConfigManager.getBoolean(spec.pkg, feature.key, feature.default)
+            thumbTintList = ColorStateList(
+                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(c("accent"), c("text_tertiary"))
+            )
+            trackTintList = ColorStateList(
+                arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                intArrayOf(ColorUtils.setAlphaComponent(c("accent"), 0x66), c("line"))
+            )
+            setOnCheckedChangeListener { _, checked ->
+                ConfigManager.setBoolean(spec.pkg, feature.key, checked)
+            }
+        }
+        row.addView(switch, LinearLayout.LayoutParams(WRAP, WRAP).apply { topMargin = dp(12) })
+        return row
+    }
+
+    private fun buildFooter(): View {
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        box.addView(
+            text(
+                "版本 ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE}) · 单入口 LibXposed API 101 · 零 SO 依赖",
+                11f, c("text_tertiary")
+            )
+        )
+        box.addView(
+            text(
+                "老版 XposedBridge 入口已移除：那条路径无法装载拦截后端，只会静默失效。请使用 LSPosed 1.9 及以上。",
+                11f, c("text_tertiary"), topDp = 6
+            )
+        )
+        box.addView(
+            text("诊断：宿主启动后 LSPosed 日志搜索 HeHook 汇总，可见 applied / failed 计数。", 11f, c("text_tertiary"), topDp = 6)
+                .apply { setOnClickListener { showAbout() } }
+        )
+        return box
+    }
+
+    // ---------------------------------------------------------------- 状态
+
+    private fun refreshStatus() {
+        cardBackgrounds.forEach { (card, spec) ->
+            val chipView = card.findViewWithTag<TextView>("status_chip") ?: return@forEach
+            val installed = installedVersion(spec.pkg)
+            if (installed != null) {
+                chipView.text = "已安装 v$installed"
+                chipView.setTextColor(c("ok"))
+                chipView.background = GradientDrawable().apply {
+                    cornerRadius = dp(999).toFloat()
+                    setColor(ColorUtils.setAlphaComponent(c("ok"), 0x22))
+                }
+            } else {
+                chipView.text = "未安装"
+                chipView.setTextColor(c("text_tertiary"))
+                chipView.background = GradientDrawable().apply {
+                    cornerRadius = dp(999).toFloat()
+                    setColor(c("line_soft"))
+                }
+            }
         }
     }
 
-    private fun updateInstalledStatus() {
-        // 红果状态
-        val hg = checkAppInstalled(PKG_HONGGUO)
-        binding.tvHongGuoStatus.text = hg.second
-        if (hg.first) {
-            binding.tvHongGuoStatus.setBackgroundResource(R.drawable.bg_chip_status)
-            binding.tvHongGuoStatus.setTextColor(getColor(R.color.status_active))
-        } else {
-            binding.tvHongGuoStatus.setBackgroundColor(getColor(R.color.surface_variant))
-            binding.tvHongGuoStatus.setTextColor(getColor(R.color.text_tertiary))
-        }
-
-        // 番茄状态
-        val fq = checkAppInstalled(PKG_FANQIE)
-        binding.tvFanQieStatus.text = fq.second
-        if (fq.first) {
-            binding.tvFanQieStatus.setBackgroundResource(R.drawable.bg_chip_status)
-            binding.tvFanQieStatus.setTextColor(getColor(R.color.status_active))
-        } else {
-            binding.tvFanQieStatus.setBackgroundColor(getColor(R.color.surface_variant))
-            binding.tvFanQieStatus.setTextColor(getColor(R.color.text_tertiary))
-        }
-
-        // B站状态
-        val bili = checkAppInstalled(PKG_BILI)
-        binding.tvBiliStatus.text = bili.second
-        if (bili.first) {
-            binding.tvBiliStatus.setBackgroundResource(R.drawable.bg_chip_status)
-            binding.tvBiliStatus.setTextColor(getColor(R.color.status_active))
-        } else {
-            binding.tvBiliStatus.setBackgroundColor(getColor(R.color.surface_variant))
-            binding.tvBiliStatus.setTextColor(getColor(R.color.text_tertiary))
-        }
-
-        // 汽水音乐状态
-        val luna = checkAppInstalled(PKG_LUNA)
-        binding.tvLunaStatus.text = luna.second
-        if (luna.first) {
-            binding.tvLunaStatus.setBackgroundResource(R.drawable.bg_chip_status)
-            binding.tvLunaStatus.setTextColor(getColor(R.color.status_active))
-        } else {
-            binding.tvLunaStatus.setBackgroundColor(getColor(R.color.surface_variant))
-            binding.tvLunaStatus.setTextColor(getColor(R.color.text_tertiary))
-        }
+    private fun installedVersion(pkg: String): String? = try {
+        packageManager.getPackageInfo(pkg, 0).versionName ?: "?"
+    } catch (_: PackageManager.NameNotFoundException) {
+        null
+    } catch (_: Throwable) {
+        null
     }
 
-    private fun checkAppInstalled(packageName: String): Pair<Boolean, String> {
-        return try {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            Pair(true, "已安装 v${pInfo.versionName}")
-        } catch (_: PackageManager.NameNotFoundException) {
-            Pair(false, "未安装")
-        } catch (_: Throwable) {
-            Pair(false, "未检测到")
-        }
-    }
-
-    private fun initHongGuoSettings() {
-        with(binding) {
-            switchHongGuo1080p.isChecked = ConfigManager.getBoolean(PKG_HONGGUO, "force_1080p", true)
-            switchHongGuo1080p.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_HONGGUO, "force_1080p", isChecked)
-            }
-
-            switchHongGuoVip.isChecked = ConfigManager.getBoolean(PKG_HONGGUO, "unlock_vip", true)
-            switchHongGuoVip.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_HONGGUO, "unlock_vip", isChecked)
-            }
-
-            switchHongGuoAds.isChecked = ConfigManager.getBoolean(PKG_HONGGUO, "remove_ads", true)
-            switchHongGuoAds.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_HONGGUO, "remove_ads", isChecked)
-            }
-
-            switchHongGuoHotfix.isChecked = ConfigManager.getBoolean(PKG_HONGGUO, "disable_hotfix", true)
-            switchHongGuoHotfix.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_HONGGUO, "disable_hotfix", isChecked)
-            }
-
-            btnRestartHongGuo.setOnClickListener {
-                restartPackage(PKG_HONGGUO, "红果短剧")
-            }
-        }
-    }
-
-    private fun initFanQieSettings() {
-        with(binding) {
-            switchFanQieVip.isChecked = ConfigManager.getBoolean(PKG_FANQIE, "unlock_reader_vip", true)
-            switchFanQieVip.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_FANQIE, "unlock_reader_vip", isChecked)
-            }
-
-            switchFanQieAds.isChecked = ConfigManager.getBoolean(PKG_FANQIE, "remove_reader_ads", true)
-            switchFanQieAds.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_FANQIE, "remove_reader_ads", isChecked)
-            }
-
-            switchFanQieTts.isChecked = ConfigManager.getBoolean(PKG_FANQIE, "unlock_tts_timbre", true)
-            switchFanQieTts.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_FANQIE, "unlock_tts_timbre", isChecked)
-            }
-
-            switchFanQiePendant.isChecked = ConfigManager.getBoolean(PKG_FANQIE, "hide_floating_pendant", true)
-            switchFanQiePendant.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_FANQIE, "hide_floating_pendant", isChecked)
-            }
-
-            btnRestartFanQie.setOnClickListener {
-                restartPackage(PKG_FANQIE, "番茄小说")
-            }
-        }
-    }
-
-    private fun initBiliSettings() {
-        with(binding) {
-            switchBiliSplash.isChecked = ConfigManager.getBoolean(PKG_BILI, "remove_splash_ad", true)
-            switchBiliSplash.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_BILI, "remove_splash_ad", isChecked)
-            }
-
-            switchBiliFeedAds.isChecked = ConfigManager.getBoolean(PKG_BILI, "remove_feed_ads", true)
-            switchBiliFeedAds.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_BILI, "remove_feed_ads", isChecked)
-            }
-
-            switchBiliBgPlay.isChecked = ConfigManager.getBoolean(PKG_BILI, "unlock_background_play", true)
-            switchBiliBgPlay.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_BILI, "unlock_background_play", isChecked)
-            }
-
-            btnRestartBili.setOnClickListener {
-                restartPackage(PKG_BILI, "哔哩哔哩")
-            }
-        }
-    }
-
-    private fun initLunaSettings() {
-        with(binding) {
-            switchLunaVip.isChecked = ConfigManager.getBoolean(PKG_LUNA, "unlock_vip", true)
-            switchLunaVip.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_LUNA, "unlock_vip", isChecked)
-            }
-
-            switchLunaAudioAd.isChecked = ConfigManager.getBoolean(PKG_LUNA, "remove_audio_ads", true)
-            switchLunaAudioAd.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_LUNA, "remove_audio_ads", isChecked)
-            }
-
-            switchLunaVisualAd.isChecked = ConfigManager.getBoolean(PKG_LUNA, "remove_visual_ads", true)
-            switchLunaVisualAd.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_LUNA, "remove_visual_ads", isChecked)
-            }
-
-            switchLunaHotfix.isChecked = ConfigManager.getBoolean(PKG_LUNA, "disable_hotfix", true)
-            switchLunaHotfix.setOnCheckedChangeListener { _, isChecked ->
-                ConfigManager.setBoolean(PKG_LUNA, "disable_hotfix", isChecked)
-            }
-
-            btnRestartLuna.setOnClickListener {
-                restartPackage(PKG_LUNA, "汽水音乐")
-            }
-        }
-    }
-
-    private fun restartPackage(packageName: String, appName: String) {
+    private fun restartPackage(pkg: String, label: String) {
         val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        am.killBackgroundProcesses(packageName)
-        Snackbar.make(binding.root, "已重启 $appName 进程，重新打开即可生效", Snackbar.LENGTH_SHORT).show()
+        am.killBackgroundProcesses(pkg)
+        toast("已重启 $label，重新打开即可生效")
     }
 
-    private fun restartAllApps() {
+    private fun restartAll() {
         val am = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
-        am.killBackgroundProcesses(PKG_HONGGUO)
-        am.killBackgroundProcesses(PKG_FANQIE)
-        am.killBackgroundProcesses(PKG_BILI)
-        am.killBackgroundProcesses(PKG_LUNA)
-        Snackbar.make(binding.root, "已一键重启全部受控应用（红果/番茄/B站/汽水）", Snackbar.LENGTH_SHORT).show()
+        PluginRegistry.apps.forEach { am.killBackgroundProcesses(it.pkg) }
+        toast("已重启全部受控应用")
     }
 
-    private fun showAboutDialog() {
+    private fun showAbout() {
         MaterialAlertDialogBuilder(this)
-            .setTitle("关于 HeHook 聚合助手")
+            .setTitle("HeHook v${BuildConfig.VERSION_NAME}")
             .setMessage(
                 """
-                【版本】v1.1.6 (Build 116)
-                【标准】Modern LibXposed API 101
-                【架构】零 SO 依赖 / 纯 Java 虚拟调用 / 极致轻量秒级启动
+                【架构】Modern LibXposed API 101 单入口 · 零 SO 依赖 · 纯反射调用
+                【注册】应用清单与开关由 PluginRegistry 单表驱动，路由 / 作用域 / 界面同源
+                【诊断】每次接管都会输出一行 HeHook 汇总：applied / failed / missing
 
-                【更新亮点 v1.1.6】
-                - 🎵 汽水音乐：彻底拔除 Activity 全局生命周期与布局修改等闪退隐患；实装 VipStatus/CommerceInfo 构造器字段劫持 + 强锁 SVIP 双保险，开屏 CommonSplashAdConfig 纯静默拦截。
-                - 🎬 红果短剧：源头 VipInfoModel 构造劫持，彻底清除 11 类反射开销，告别掉帧卡顿，流畅如丝；保留 1080P 超清锁与短剧中插免广。
-                - 📖 番茄小说：吸纳 HookVip 极简精髓，阅读免广与 AI 听书高品质多音色全解锁。
-                - 📺 哔哩哔哩：实装 VipUserInfo/VipExtraUserInfo 大会员与画质特权，现代 gRPC 开屏回包斩首秒过，首页推荐流卡片净化。
-                - 🛡️ 安全稳健：全域移除单字母模糊拦截，杜绝误伤宿主正常 UI 渲染与网络流程。
+                【v1.5.0 改动】
+                - 修复老入口下拦截后端未初始化、所有 hook 静默失效
+                - 移除老版 XposedBridge 入口，只保留现代 API 单入口
+                - 全部诊断日志改为 error 级，LSPosed 日志页可见
+                - 管理端重做：数据驱动卡片、实时安装状态与逐项开关
+                - 签名密钥移出公开仓库，改用独立密钥与新指纹
                 """.trimIndent()
             )
-            .setPositiveButton("好的", null)
+            .setPositiveButton("知道了", null)
             .show()
+    }
+
+    private fun toast(msg: String) {
+        android.widget.Toast.makeText(this, msg, android.widget.Toast.LENGTH_SHORT).show()
+    }
+
+    // ---------------------------------------------------------------- 工具
+
+    private fun c(res: Int): Int = getColor(res)
+
+    private fun c(name: String): Int = getColor(resources.getIdentifier(name, "color", packageName))
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun dp(v: Float): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun text(
+        s: String,
+        sizeSp: Float,
+        color: Int,
+        bold: Boolean = false,
+        topDp: Int = 0
+    ): TextView = TextView(this).apply {
+        text = s
+        textSize = sizeSp
+        setTextColor(color)
+        if (bold) typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        includeFontPadding = false
+        if (topDp > 0) setPadding(0, dp(topDp), 0, 0)
+    }
+
+    private fun chip(label: String, textColor: Int, bgColor: Int): TextView = TextView(this).apply {
+        text = label
+        textSize = 11f
+        setTextColor(textColor)
+        setPadding(dp(10), dp(5), dp(10), dp(5))
+        background = GradientDrawable().apply {
+            cornerRadius = dp(999).toFloat()
+            setColor(bgColor)
+        }
+    }
+
+    private fun lp(top: Float = 0f): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = dp(top) }
+
+    private fun weightP(w: Float): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(0, WRAP, w)
+
+    private fun space(h: Int): Space = Space(this).apply {
+        layoutParams = LinearLayout.LayoutParams(1, dp(h))
+    }
+
+    companion object {
+        private const val MATCH = LinearLayout.LayoutParams.MATCH_PARENT
+        private const val WRAP = LinearLayout.LayoutParams.WRAP_CONTENT
     }
 }

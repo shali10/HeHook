@@ -11,3 +11,8 @@ local.properties
 captures/
 .externalNativeBuild/
 .cxx/
+
+# 签名密钥绝不入库
+*.jks
+*.keystore
+app/hehook*.jks

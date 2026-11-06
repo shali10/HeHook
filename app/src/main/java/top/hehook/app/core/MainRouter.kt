@@ -4,13 +4,13 @@ import android.util.Log
 import io.github.libxposed.api.XposedModule
 import io.github.libxposed.api.XposedModuleInterface.ModuleLoadedParam
 import io.github.libxposed.api.XposedModuleInterface.PackageReadyParam
-import top.hehook.app.plugins.bilibili.BiliBiliPlugin
-import top.hehook.app.plugins.fanqie.FanQiePlugin
-import top.hehook.app.plugins.hongguo.HongGuoPlugin
-import top.hehook.app.plugins.luna.LunaMusicPlugin
 
 /**
- * 现代 LibXposed (API 101) 统一入口与运行时路由器
+ * 现代 LibXposed (API 101) 唯一入口。
+ *
+ * v1.5.0 起移除老版 XposedBridge 入口（assets/xposed_init + LegacyInit）：
+ * 那条路径下 LibXposed 后端根本装不上，所有 hook 都会静默失败，留着比没有更坏。
+ * 需要兼容的设备请使用 LSPosed 1.9+（原生支持 API 101）。
  */
 class MainRouter : XposedModule() {
 
@@ -21,14 +21,12 @@ class MainRouter : XposedModule() {
             // 类静态初始化即打点：比任何回调都早，用于区分「类没加载」与「回调没触发」
             Trace.log(TAG, "== MainRouter CLASS LOADED ==")
         }
-        lateinit var instance: MainRouter
-            private set
     }
 
     override fun onModuleLoaded(param: ModuleLoadedParam) {
         super.onModuleLoaded(param)
-        instance = this
         HookKit.init(this)
+        HookStats.reset()
         Trace.log(TAG, "== HeHook Module Loaded into process ==")
     }
 
@@ -37,25 +35,29 @@ class MainRouter : XposedModule() {
 
         val pkg = param.packageName
         val cl = param.classLoader
+        val spec = PluginRegistry.findByPackage(pkg)
 
-        Trace.log(TAG, "== onPackageReady == pkg=$pkg cl=${cl.javaClass.name}")
+        Trace.log(TAG, "== onPackageReady == pkg=$pkg plugin=${spec?.name ?: "未托管"}")
 
-        // 核心分发路由：根据宿主包名，精确分发给各自独立的子模块
-        val plugin: BasePlugin? = when (pkg) {
-            "com.phoenix.read" -> HongGuoPlugin(pkg, cl)
-            "com.dragon.read" -> FanQiePlugin(pkg, cl)
-            "tv.danmaku.bili" -> BiliBiliPlugin(pkg, cl)
-            "com.luna.music" -> LunaMusicPlugin(pkg, cl)
-            else -> null
+        if (spec == null) return
+
+        HookStats.reset()
+        val startedAt = System.currentTimeMillis()
+
+        val plugin = PluginRegistry.createPlugin(pkg, cl)
+        if (plugin == null) {
+            Log.e(TAG, "插件构造失败：$pkg，检查 PluginRegistry 中 ${spec.name} 的 factory")
+            return
         }
 
-        if (plugin != null) {
-            Log.i(TAG, "Dispatching to plugin: ${plugin.javaClass.simpleName} for [$pkg]")
-            try {
-                plugin.handleHook()
-            } catch (t: Throwable) {
-                Trace.log(TAG, "Fatal executing plugin for $pkg: ${t}")
-            }
+        try {
+            plugin.handleHook()
+        } catch (t: Throwable) {
+            Log.e(TAG, "执行 ${spec.name} 插件异常", t)
         }
+
+        val cost = System.currentTimeMillis() - startedAt
+        // 汇总走 Log.e：LSPosed 日志页默认只显示 error 级别
+        Log.e(TAG, "HeHook 汇总 ${spec.name} | ${HookStats.summary(pkg)} | 耗时 ${cost}ms")
     }
 }
